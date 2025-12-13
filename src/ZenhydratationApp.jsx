@@ -1,4 +1,4 @@
- import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Droplets,
   Eye,
@@ -28,17 +28,20 @@ import {
  * ==========================================================
  * ZenhydratationApp.jsx (Vercel-safe)
  * - 3 thèmes : neo (Neo Glass), classic, wellness
- * - Réglages via onglet Réglages (bottom nav), pas de bouton settings en haut
- * - Offline: localStorage
- * - Hydratation: verres vides qui se remplissent avec animation (wave)
+ * - Réglages via onglet Réglages (bottom nav) : pas de bouton settings en haut
+ * - Offline: localStorage (historique 30j)
+ * - Hydratation: ml (source de vérité), verres avec remplissage progressif
+ * - Appui long sur un verre = annuler (retirer une dose)
+ * - Bulles optionnelles
+ * - Avatar homme/femme + énergie (fatigue) qui s’améliore avec hydratation + routines
  * ==========================================================
  */
 
 /* =========================
  * Storage
  * ========================= */
-const STORAGE_STATE_KEY = "zenhydratation_state_v4";
-const STORAGE_HISTORY_KEY = "zenhydratation_history_v4";
+const STORAGE_STATE_KEY = "zenhydratation_state_v5";
+const STORAGE_HISTORY_KEY = "zenhydratation_history_v5";
 
 function safeParse(json, fallback) {
   try {
@@ -76,7 +79,7 @@ function addDays(d, delta) {
 
 function isActiveDay(entry) {
   return (
-    (entry.water ?? 0) > 0 ||
+    (entry.waterMl ?? 0) > 0 ||
     (entry.eyeBreaks ?? 0) > 0 ||
     (entry.stretches ?? 0) > 0 ||
     (entry.wakeRoutines ?? 0) > 0 ||
@@ -171,7 +174,7 @@ const THEMES = {
 
   classic: {
     id: "classic",
-    label: "Classique (clair)",
+    label: "Classique",
     bgRoot: "bg-gray-50",
     bgLayer: (
       <>
@@ -322,14 +325,21 @@ export default function ZenhydratationApp() {
   const [themeId, setThemeId] = useState("neo");
   const theme = THEMES[themeId] ?? THEMES.neo;
 
-  // settings
-  const [waterGoal, setWaterGoal] = useState(8);
+  // settings (timers)
   const [eyeBreakInterval, setEyeBreakInterval] = useState(1200);
   const [stretchInterval, setStretchInterval] = useState(3600);
   const [soundEnabled, setSoundEnabled] = useState(true);
 
-  // timers / session
-  const [waterCount, setWaterCount] = useState(0);
+  // NEW: hydration as ml
+  const [cupMl, setCupMl] = useState(250);
+  const [dailyGoalMl, setDailyGoalMl] = useState(2000);
+  const [waterMl, setWaterMl] = useState(0);
+
+  // NEW: avatar + bubbles
+  const [avatar, setAvatar] = useState("female"); // "female" | "male"
+  const [bubblesEnabled, setBubblesEnabled] = useState(true);
+
+  // timers
   const [eyeBreakTimer, setEyeBreakTimer] = useState(1200);
   const [stretchTimer, setStretchTimer] = useState(3600);
   const [isPaused, setIsPaused] = useState(false);
@@ -339,7 +349,7 @@ export default function ZenhydratationApp() {
   const [showExercise, setShowExercise] = useState(null); // "eye"|"stretch"|"wake"|"sleep"|null
   const [showNotif, setShowNotif] = useState(null); // "eye"|"stretch"|null
 
-  // player
+  // routine player
   const [activeRoutine, setActiveRoutine] = useState(null);
 
   // history & stats
@@ -347,7 +357,7 @@ export default function ZenhydratationApp() {
   const [streak, setStreak] = useState(0);
   const [todayStats, setTodayStats] = useState({
     dayKey: dayKey(),
-    water: 0,
+    waterMl: 0,
     eyeBreaks: 0,
     stretches: 0,
     wakeRoutines: 0,
@@ -362,25 +372,90 @@ export default function ZenhydratationApp() {
   const exercises = useMemo(
     () => ({
       eye: [
-        { id: "eye-2020", name: "Règle 20-20-20", durationSec: 20, desc: "Regardez un objet à ~6 mètres pendant 20 secondes." },
-        { id: "eye-blink", name: "Clignements", durationSec: 20, desc: "Clignez lentement des yeux (10 fois environ)." },
-        { id: "eye-massage", name: "Massage des yeux", durationSec: 20, desc: "Fermez les yeux et massez doucement les tempes." }
+        {
+          id: "eye-2020",
+          name: "Règle 20-20-20",
+          durationSec: 20,
+          desc: "Regardez un objet à ~6 mètres pendant 20 secondes."
+        },
+        {
+          id: "eye-blink",
+          name: "Clignements",
+          durationSec: 20,
+          desc: "Clignez lentement des yeux (10 fois environ)."
+        },
+        {
+          id: "eye-massage",
+          name: "Massage des yeux",
+          durationSec: 20,
+          desc: "Fermez les yeux et massez doucement les tempes."
+        }
       ],
       stretch: [
-        { id: "st-neck", name: "Rotation du cou", durationSec: 30, desc: "Tournez lentement la tête de gauche à droite." },
-        { id: "st-shoulders", name: "Étirement des épaules", durationSec: 30, desc: "Roulez vos épaules en arrière puis en avant." },
-        { id: "st-arms", name: "Étirement des bras", durationSec: 30, desc: "Tendez les bras, entrelacez les doigts, étirez doucement." },
-        { id: "st-back", name: "Flexion du dos", durationSec: 30, desc: "Penchez-vous vers l'avant doucement (sans douleur)." }
+        {
+          id: "st-neck",
+          name: "Rotation du cou",
+          durationSec: 30,
+          desc: "Tournez lentement la tête de gauche à droite."
+        },
+        {
+          id: "st-shoulders",
+          name: "Étirement des épaules",
+          durationSec: 30,
+          desc: "Roulez vos épaules en arrière puis en avant."
+        },
+        {
+          id: "st-arms",
+          name: "Étirement des bras",
+          durationSec: 30,
+          desc: "Tendez les bras, entrelacez les doigts, étirez doucement."
+        },
+        {
+          id: "st-back",
+          name: "Flexion du dos",
+          durationSec: 30,
+          desc: "Penchez-vous vers l'avant doucement (sans douleur)."
+        }
       ],
       wake: [
-        { id: "wk-breath", name: "Respiration énergisante", durationSec: 60, desc: "Inspirez profondément par le nez, expirez lentement." },
-        { id: "wk-mobility", name: "Mobilité douce", durationSec: 60, desc: "Bougez cou/épaules/hanches, amplitude confortable." },
-        { id: "wk-posture", name: "Activation posturale", durationSec: 45, desc: "Redressez-vous, omoplates basses, respiration calme." }
+        {
+          id: "wk-breath",
+          name: "Respiration énergisante",
+          durationSec: 60,
+          desc: "Inspirez profondément par le nez, expirez lentement."
+        },
+        {
+          id: "wk-mobility",
+          name: "Mobilité douce",
+          durationSec: 60,
+          desc: "Bougez cou/épaules/hanches, amplitude confortable."
+        },
+        {
+          id: "wk-posture",
+          name: "Activation posturale",
+          durationSec: 45,
+          desc: "Redressez-vous, omoplates basses, respiration calme."
+        }
       ],
       sleep: [
-        { id: "sl-breath", name: "Respiration calmante", durationSec: 60, desc: "Inspirez 4s, expirez 6s. Relâchez les épaules." },
-        { id: "sl-neck", name: "Détente nuque/épaules", durationSec: 45, desc: "Relâchez nuque/épaules, micro-rotations très lentes." },
-        { id: "sl-scan", name: "Scan corporel", durationSec: 90, desc: "Parcourez le corps et relâchez progressivement." }
+        {
+          id: "sl-breath",
+          name: "Respiration calmante",
+          durationSec: 60,
+          desc: "Inspirez 4s, expirez 6s. Relâchez les épaules."
+        },
+        {
+          id: "sl-neck",
+          name: "Détente nuque/épaules",
+          durationSec: 45,
+          desc: "Relâchez nuque/épaules, micro-rotations très lentes."
+        },
+        {
+          id: "sl-scan",
+          name: "Scan corporel",
+          durationSec: 90,
+          desc: "Parcourez le corps et relâchez progressivement."
+        }
       ]
     }),
     []
@@ -408,16 +483,20 @@ export default function ZenhydratationApp() {
 
     if (typeof s.themeId === "string" && THEMES[s.themeId]) setThemeId(s.themeId);
 
-    if (typeof s.waterGoal === "number") setWaterGoal(clampInt(s.waterGoal, 6, 12));
     if (typeof s.eyeBreakInterval === "number") setEyeBreakInterval(clampInt(s.eyeBreakInterval, 600, 7200));
     if (typeof s.stretchInterval === "number") setStretchInterval(clampInt(s.stretchInterval, 900, 10800));
     if (typeof s.soundEnabled === "boolean") setSoundEnabled(s.soundEnabled);
+
+    if (typeof s.cupMl === "number") setCupMl(clampInt(s.cupMl, 150, 600));
+    if (typeof s.dailyGoalMl === "number") setDailyGoalMl(clampInt(s.dailyGoalMl, 1200, 4000));
+    if (typeof s.avatar === "string") setAvatar(s.avatar === "male" ? "male" : "female");
+    if (typeof s.bubblesEnabled === "boolean") setBubblesEnabled(s.bubblesEnabled);
 
     const current = dayKey();
     if (s.todayStats?.dayKey === current) {
       setTodayStats({
         dayKey: current,
-        water: clampInt(s.todayStats.water ?? 0, 0, 500),
+        waterMl: clampInt(s.todayStats.waterMl ?? 0, 0, 50_000),
         eyeBreaks: clampInt(s.todayStats.eyeBreaks ?? 0, 0, 500),
         stretches: clampInt(s.todayStats.stretches ?? 0, 0, 500),
         wakeRoutines: clampInt(s.todayStats.wakeRoutines ?? 0, 0, 500),
@@ -430,14 +509,18 @@ export default function ZenhydratationApp() {
           sleep: (s.todayStats.details?.sleep && typeof s.todayStats.details.sleep === "object") ? s.todayStats.details.sleep : {}
         }
       });
-      setWaterCount(clampInt(s.waterCount ?? 0, 0, 200));
+
+      // waterMl is source of truth; fall back on saved waterMl, else todayStats.waterMl
+      if (typeof s.waterMl === "number") setWaterMl(clampInt(s.waterMl, 0, 50_000));
+      else setWaterMl(clampInt(s.todayStats?.waterMl ?? 0, 0, 50_000));
+
       setEyeBreakTimer(clampInt(s.eyeBreakTimer ?? eyeBreakInterval, 1, 7200));
       setStretchTimer(clampInt(s.stretchTimer ?? stretchInterval, 1, 10800));
       setIsPaused(!!s.isPaused);
     } else {
       setTodayStats({
         dayKey: current,
-        water: 0,
+        waterMl: 0,
         eyeBreaks: 0,
         stretches: 0,
         wakeRoutines: 0,
@@ -445,7 +528,7 @@ export default function ZenhydratationApp() {
         workTime: 0,
         details: { eye: {}, stretch: {}, wake: {}, sleep: {} }
       });
-      setWaterCount(0);
+      setWaterMl(0);
       setEyeBreakTimer(s.eyeBreakInterval ?? 1200);
       setStretchTimer(s.stretchInterval ?? 3600);
       setIsPaused(false);
@@ -458,11 +541,17 @@ export default function ZenhydratationApp() {
   useEffect(() => {
     const payload = {
       themeId,
-      waterGoal,
       eyeBreakInterval,
       stretchInterval,
       soundEnabled,
-      waterCount,
+      // hydration
+      cupMl,
+      dailyGoalMl,
+      waterMl,
+      // avatar / visual
+      avatar,
+      bubblesEnabled,
+      // timers / session
       eyeBreakTimer,
       stretchTimer,
       isPaused,
@@ -479,11 +568,14 @@ export default function ZenhydratationApp() {
     };
   }, [
     themeId,
-    waterGoal,
     eyeBreakInterval,
     stretchInterval,
     soundEnabled,
-    waterCount,
+    cupMl,
+    dailyGoalMl,
+    waterMl,
+    avatar,
+    bubblesEnabled,
     eyeBreakTimer,
     stretchTimer,
     isPaused,
@@ -491,7 +583,14 @@ export default function ZenhydratationApp() {
   ]);
 
   /* =========================
-   * Upsert today in history
+   * Keep todayStats.waterMl in sync with waterMl
+   * ========================= */
+  useEffect(() => {
+    setTodayStats((s) => (s.waterMl === waterMl ? s : { ...s, waterMl }));
+  }, [waterMl]);
+
+  /* =========================
+   * Upsert today in history (max 30)
    * ========================= */
   useEffect(() => {
     const current = todayStats.dayKey;
@@ -515,7 +614,7 @@ export default function ZenhydratationApp() {
         lastDayRef.current = current;
         setTodayStats({
           dayKey: current,
-          water: 0,
+          waterMl: 0,
           eyeBreaks: 0,
           stretches: 0,
           wakeRoutines: 0,
@@ -523,7 +622,7 @@ export default function ZenhydratationApp() {
           workTime: 0,
           details: { eye: {}, stretch: {}, wake: {}, sleep: {} }
         });
-        setWaterCount(0);
+        setWaterMl(0);
         setEyeBreakTimer(eyeBreakInterval);
         setStretchTimer(stretchInterval);
         setShowNotif(null);
@@ -579,7 +678,27 @@ export default function ZenhydratationApp() {
     return `${mins}:${String(secs).padStart(2, "0")}`;
   };
 
-  const hydrationPct = Math.round((waterCount / Math.max(1, waterGoal)) * 100);
+  const waterCount = Math.floor(waterMl / Math.max(1, cupMl));
+  const hydrationPct = Math.round((waterMl / Math.max(1, dailyGoalMl)) * 100);
+
+  const energyScore = useMemo(() => {
+    const hydration = Math.min(1, waterMl / Math.max(1, dailyGoalMl));
+    const routines =
+      todayStats.eyeBreaks +
+      todayStats.stretches +
+      todayStats.wakeRoutines +
+      todayStats.sleepRoutines;
+    const activity = Math.min(1, routines / 6);
+    const score = 0.6 * hydration + 0.4 * activity;
+    return Math.round(score * 100);
+  }, [
+    waterMl,
+    dailyGoalMl,
+    todayStats.eyeBreaks,
+    todayStats.stretches,
+    todayStats.wakeRoutines,
+    todayStats.sleepRoutines
+  ]);
 
   const nextHero = useMemo(() => {
     const eyeSooner = eyeBreakTimer <= stretchTimer;
@@ -620,7 +739,8 @@ export default function ZenhydratationApp() {
 
   const chart7 = window7.map((d) => ({
     day: d.dayKey.slice(5),
-    water: d.water ?? 0,
+    // convert ml -> "doses" for graph readability
+    water: Math.round((d.waterMl ?? 0) / Math.max(1, cupMl)),
     eye: d.eyeBreaks ?? 0,
     stretch: d.stretches ?? 0,
     wake: d.wakeRoutines ?? 0,
@@ -629,7 +749,7 @@ export default function ZenhydratationApp() {
 
   const chart30 = window30.map((d) => ({
     day: d.dayKey.slice(5),
-    water: d.water ?? 0,
+    water: Math.round((d.waterMl ?? 0) / Math.max(1, cupMl)),
     eye: d.eyeBreaks ?? 0,
     stretch: d.stretches ?? 0,
     wake: d.wakeRoutines ?? 0,
@@ -637,13 +757,21 @@ export default function ZenhydratationApp() {
   }));
 
   /* =========================
-   * Actions
+   * Hydration actions (ml)
    * ========================= */
   const addWater = () => {
-    if (waterCount < waterGoal) {
-      setWaterCount((v) => v + 1);
-      setTodayStats((s) => ({ ...s, water: s.water + 1 }));
+    const nextMl = Math.min(dailyGoalMl, waterMl + cupMl);
+    if (nextMl !== waterMl) {
+      setWaterMl(nextMl);
       if (soundEnabled) playTone({ freq: 740 });
+    }
+  };
+
+  const removeWater = () => {
+    const nextMl = Math.max(0, waterMl - cupMl);
+    if (nextMl !== waterMl) {
+      setWaterMl(nextMl);
+      if (soundEnabled) playTone({ freq: 520, gain: 0.02 });
     }
   };
 
@@ -663,13 +791,11 @@ export default function ZenhydratationApp() {
    * Routine player
    * ========================= */
   const startQueue = (type, queue, startIndex = 0) => {
-    const now = Date.now();
     setActiveRoutine({
       type,
       queue,
       index: startIndex,
       remainingSec: queue[startIndex].durationSec,
-      startedAt: now,
       paused: false
     });
   };
@@ -689,19 +815,17 @@ export default function ZenhydratationApp() {
     });
   };
 
-  const creditCompletion = (type, _exIdOrNull) => {
+  const creditCompletion = (type) => {
     const totalKeyMap = {
       eye: "eyeBreaks",
       stretch: "stretches",
       wake: "wakeRoutines",
       sleep: "sleepRoutines"
     };
-
     setTodayStats((s) => {
       const totalKey = totalKeyMap[type];
       return { ...s, [totalKey]: (s[totalKey] ?? 0) + 1 };
     });
-
     if (soundEnabled) playTone({ freq: type === "sleep" ? 520 : 740, durationMs: 220 });
   };
 
@@ -729,7 +853,7 @@ export default function ZenhydratationApp() {
             return { ...r, index: nextIndex, remainingSec: r.queue[nextIndex].durationSec };
           }
 
-          creditCompletion(r.type, null);
+          creditCompletion(r.type);
           return null;
         }
 
@@ -738,7 +862,6 @@ export default function ZenhydratationApp() {
     }, 1000);
 
     return () => clearInterval(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeRoutine, soundEnabled]);
 
   /* =========================
@@ -749,14 +872,14 @@ export default function ZenhydratationApp() {
 
     return (
       <div className="px-5 pb-24 pt-6">
-        {/* Header: pas de bouton settings en haut */}
+        {/* Header */}
         <div className="flex items-start justify-between">
           <div>
             <div className={cn("text-[34px] font-semibold tracking-tight leading-tight", theme.textPrimary)}>
-              Zen et hydraté
+              Zenhydratation
             </div>
             <div className={cn("mt-1 text-[14px] font-medium", theme.textMuted)}>
-              Pause, Respiration et Hydratation pour prendre soin de son corps et de son esprit.
+              Focus. Respire. Hydrate.
             </div>
 
             <div className="mt-3 flex items-center gap-3">
@@ -765,7 +888,10 @@ export default function ZenhydratationApp() {
                 <span className={cn("text-[13px] font-semibold", theme.textPrimary)}>{streak}j</span>
               </div>
 
-            
+              <div className={cn("rounded-2xl px-4 py-2", theme.cardSoft)}>
+                <span className={cn("text-[13px] font-semibold", theme.textSecondary)}>Mode</span>{" "}
+                <span className={cn("text-[13px] font-semibold", theme.textPrimary)}>Offline</span>
+              </div>
             </div>
           </div>
 
@@ -826,22 +952,58 @@ export default function ZenhydratationApp() {
           </div>
         </div>
 
-        {/* Hydratation (verres animés) */}
+        {/* Energy / Avatar */}
+        <div className={cn("mt-6 rounded-[28px] p-6", theme.card)}>
+          <div className="flex items-center gap-4">
+            <AvatarMood theme={theme} avatar={avatar} energyScore={energyScore} />
+            <div className="flex-1">
+              <div className={cn("text-[16px] font-semibold", theme.textPrimary)}>Énergie</div>
+              <div className={cn("mt-1 text-[13px]", theme.textMuted)}>
+                {energyScore < 35 ? "Fatigue élevée" : energyScore < 70 ? "En amélioration" : "Bonne forme"}
+              </div>
+
+              <div className={cn("mt-3 h-3 rounded-full overflow-hidden", theme.id === "neo" ? "bg-white/10" : "bg-black/10")}>
+                <div
+                  className={cn(
+                    "h-full rounded-full transition-[width] duration-700 ease-out",
+                    theme.id === "neo"
+                      ? "bg-gradient-to-r from-rose-300/70 via-amber-300/70 to-emerald-300/70"
+                      : "bg-gradient-to-r from-rose-400/70 via-amber-400/70 to-emerald-400/70"
+                  )}
+                  style={{ width: `${energyScore}%` }}
+                />
+              </div>
+
+              <div className={cn("mt-2 text-[12px]", theme.textMuted)}>
+                Hydratation + routines = récupération progressive.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Hydratation (ml + verres progressifs) */}
         <div className={cn("mt-6 rounded-[28px] p-6", theme.card)}>
           <div className="flex items-end justify-between">
             <div className={cn("text-[28px] font-semibold leading-none", theme.textPrimary)}>
               Hydratation
             </div>
             <div className={cn("text-[16px] font-semibold", theme.textSecondary)}>
-              {waterCount} / {waterGoal} verres
+              {waterMl} / {dailyGoalMl} ml
             </div>
+          </div>
+
+          <div className={cn("mt-2 text-[12px]", theme.textMuted)}>
+            Dose: {cupMl}ml • {waterCount} dose{waterCount > 1 ? "s" : ""} • {Math.max(0, Math.min(100, hydrationPct))}% objectif
           </div>
 
           <div className="mt-5">
             <WaterGlasses
-              count={waterCount}
-              goal={waterGoal}
+              totalMl={waterMl}
+              goalMl={dailyGoalMl}
+              cupMl={cupMl}
               onAdd={addWater}
+              onRemove={removeWater}
+              bubblesEnabled={bubblesEnabled}
               theme={theme}
               size="md"
             />
@@ -855,18 +1017,14 @@ export default function ZenhydratationApp() {
                   : "border border-black/10 bg-black/[0.03] hover:bg-black/[0.05]"
               )}
             >
-              <span className={theme.textPrimary}>+ Ajouter un verre</span>
+              <span className={theme.textPrimary}>+ Ajouter une dose</span>
             </button>
-
-            <div className={cn("mt-3 text-[12px]", theme.textMuted)}>
-              Astuce : vous pouvez cliquer directement sur un verre vide pour l’ajouter.
-            </div>
           </div>
         </div>
 
         {/* Shortcuts */}
         <div className="mt-7">
-          <div className={cn("text-[28px] font-semibold", theme.textPrimary)}>Exercices</div>
+          <div className={cn("text-[28px] font-semibold", theme.textPrimary)}>Raccourcis</div>
 
           <div className="mt-5 grid grid-cols-2 gap-4">
             <ShortcutTile
@@ -924,9 +1082,9 @@ export default function ZenhydratationApp() {
         </div>
 
         <div className={cn("mt-7 text-[14px] leading-snug", theme.textMuted)}>
-          Aujourd&apos;hui: Eau {todayStats.water} | Yeux {todayStats.eyeBreaks} | Étirements {todayStats.stretches}
+          Aujourd&apos;hui: {todayStats.waterMl}ml • Yeux {todayStats.eyeBreaks} • Étirements {todayStats.stretches}
           <br />
-          Réveil {todayStats.wakeRoutines} | Coucher {todayStats.sleepRoutines}
+          Réveil {todayStats.wakeRoutines} • Coucher {todayStats.sleepRoutines}
         </div>
       </div>
     );
@@ -987,7 +1145,7 @@ export default function ZenhydratationApp() {
           <div className="flex items-center justify-between">
             <div className={cn("text-[16px] font-semibold", theme.textPrimary)}>Graphique 7 jours</div>
             <div className={cn("text-[13px] font-semibold", theme.textMuted)}>
-              Eau {sum(window7, "water")} · Routines {sum(window7, "wakeRoutines") + sum(window7, "sleepRoutines")}
+              Eau {Math.round(sum(window7, "waterMl") / 100) / 10}L
             </div>
           </div>
 
@@ -1017,7 +1175,7 @@ export default function ZenhydratationApp() {
                       color: theme.id === "neo" ? "rgba(255,255,255,0.7)" : "rgba(15,23,42,0.65)"
                     }}
                   />
-                  <Bar dataKey="water" name="Eau" fill="rgba(34, 211, 238, 0.60)" />
+                  <Bar dataKey="water" name={`Eau (doses ${cupMl}ml)`} fill="rgba(34, 211, 238, 0.60)" />
                   <Bar dataKey="eye" name="Yeux" fill="rgba(167, 139, 250, 0.60)" />
                   <Bar dataKey="stretch" name="Étirements" fill="rgba(52, 211, 153, 0.60)" />
                   <Bar dataKey="wake" name="Réveil" fill="rgba(251, 191, 36, 0.60)" />
@@ -1032,7 +1190,7 @@ export default function ZenhydratationApp() {
           <div className="flex items-center justify-between">
             <div className={cn("text-[16px] font-semibold", theme.textPrimary)}>Graphique 30 jours</div>
             <div className={cn("text-[13px] font-semibold", theme.textMuted)}>
-              Total jours: {window30.length}
+              Jours: {window30.length}
             </div>
           </div>
 
@@ -1062,7 +1220,7 @@ export default function ZenhydratationApp() {
                       color: theme.id === "neo" ? "rgba(255,255,255,0.7)" : "rgba(15,23,42,0.65)"
                     }}
                   />
-                  <Bar dataKey="water" name="Eau" fill="rgba(34, 211, 238, 0.55)" />
+                  <Bar dataKey="water" name={`Eau (doses ${cupMl}ml)`} fill="rgba(34, 211, 238, 0.55)" />
                   <Bar dataKey="eye" name="Yeux" fill="rgba(167, 139, 250, 0.55)" />
                   <Bar dataKey="stretch" name="Étirements" fill="rgba(52, 211, 153, 0.55)" />
                   <Bar dataKey="wake" name="Réveil" fill="rgba(251, 191, 36, 0.55)" />
@@ -1244,7 +1402,12 @@ export default function ZenhydratationApp() {
             </div>
 
             <div className="mt-6 grid grid-cols-3 gap-3">
-              <SurfaceButton onClick={toggleRoutinePause} theme={theme} className="text-center" title={activeRoutine.paused ? "Reprendre" : "Pause"}>
+              <SurfaceButton
+                onClick={toggleRoutinePause}
+                theme={theme}
+                className="text-center"
+                title={activeRoutine.paused ? "Reprendre" : "Pause"}
+              >
                 <div className="flex items-center justify-center gap-2">
                   {activeRoutine.paused ? (
                     <Play className={cn("h-4 w-4", theme.id === "neo" ? "text-white/85" : "text-gray-700")} />
@@ -1263,8 +1426,7 @@ export default function ZenhydratationApp() {
 
               <SurfaceButton
                 onClick={() => {
-                  // Terminer manuellement => incrément total (pas de détail par exercice)
-                  creditCompletion(activeRoutine.type, null);
+                  creditCompletion(activeRoutine.type);
                   setActiveRoutine(null);
                 }}
                 theme={theme}
@@ -1338,6 +1500,211 @@ export default function ZenhydratationApp() {
   };
 
   /* =========================
+   * Settings modal
+   * ========================= */
+  const SettingsModal = () => {
+    if (!showSettings) return null;
+
+    return (
+      <div className="fixed inset-0 z-50">
+        <div className={cn("absolute inset-0", theme.modalBackdrop)} onClick={() => setShowSettings(false)} />
+        <div className="absolute inset-x-0 bottom-0">
+          <div className={cn("mx-auto max-w-md rounded-t-[32px] p-6", theme.card, "border-b-0")}>
+            <div className="flex items-center justify-between">
+              <div className={cn("text-[18px] font-semibold", theme.textPrimary)}>Paramètres</div>
+              <button
+                onClick={() => setShowSettings(false)}
+                className={cn(
+                  "h-10 w-10 rounded-2xl flex items-center justify-center transition",
+                  theme.cardSoft,
+                  theme.id === "neo" ? "hover:bg-white/[0.10]" : "hover:bg-black/[0.03]"
+                )}
+              >
+                <X className={cn("h-5 w-5", theme.id === "neo" ? "text-white/75" : "text-gray-600")} />
+              </button>
+            </div>
+
+            <div className="mt-5 space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+              {/* Theme selector */}
+              <div className={cn("rounded-[22px] p-4", theme.cardSoft)}>
+                <div className={cn("text-[13px] font-semibold", theme.textSecondary)}>Thème</div>
+                <div className="mt-3 grid grid-cols-3 gap-2">
+                  {Object.values(THEMES).map((t) => (
+                    <button
+                      key={t.id}
+                      onClick={() => setThemeId(t.id)}
+                      className={cn(
+                        "rounded-2xl px-3 py-3 text-[12px] font-semibold transition border",
+                        t.id === themeId
+                          ? (theme.id === "neo" ? "border-white/20 bg-white/[0.10]" : "border-black/15 bg-black/[0.04]")
+                          : (theme.id === "neo" ? "border-white/10 bg-white/[0.06] hover:bg-white/[0.10]" : "border-black/10 bg-black/[0.02] hover:bg-black/[0.04]"),
+                        theme.textPrimary
+                      )}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Avatar */}
+              <div className={cn("rounded-[22px] p-4", theme.cardSoft)}>
+                <div className={cn("text-[13px] font-semibold", theme.textSecondary)}>Avatar</div>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => setAvatar("female")}
+                    className={cn(
+                      "rounded-2xl px-3 py-3 text-[12px] font-semibold transition border",
+                      avatar === "female"
+                        ? (theme.id === "neo" ? "border-white/20 bg-white/[0.10]" : "border-black/15 bg-black/[0.04]")
+                        : (theme.id === "neo" ? "border-white/10 bg-white/[0.06] hover:bg-white/[0.10]" : "border-black/10 bg-black/[0.02] hover:bg-black/[0.04]"),
+                      theme.textPrimary
+                    )}
+                  >
+                    Femme
+                  </button>
+                  <button
+                    onClick={() => setAvatar("male")}
+                    className={cn(
+                      "rounded-2xl px-3 py-3 text-[12px] font-semibold transition border",
+                      avatar === "male"
+                        ? (theme.id === "neo" ? "border-white/20 bg-white/[0.10]" : "border-black/15 bg-black/[0.04]")
+                        : (theme.id === "neo" ? "border-white/10 bg-white/[0.06] hover:bg-white/[0.10]" : "border-black/10 bg-black/[0.02] hover:bg-black/[0.04]"),
+                      theme.textPrimary
+                    )}
+                  >
+                    Homme
+                  </button>
+                </div>
+              </div>
+
+              {/* Hydration in ml */}
+              <div className={cn("rounded-[22px] p-4", theme.cardSoft)}>
+                <div className={cn("text-[13px] font-semibold", theme.textSecondary)}>Hydratation (ml)</div>
+
+                <div className="mt-3">
+                  <div className={cn("text-[12px] font-semibold", theme.textMuted)}>Objectif quotidien</div>
+                  <select
+                    className={cn("mt-2 w-full rounded-2xl px-3 py-3 text-[13px] font-semibold", theme.surfaceInput)}
+                    value={dailyGoalMl}
+                    onChange={(e) => setDailyGoalMl(Number(e.target.value))}
+                  >
+                    <option value={1500}>1500 ml</option>
+                    <option value={2000}>2000 ml</option>
+                    <option value={2500}>2500 ml</option>
+                    <option value={3000}>3000 ml</option>
+                    <option value={3500}>3500 ml</option>
+                  </select>
+                </div>
+
+                <div className="mt-4">
+                  <div className={cn("text-[12px] font-semibold", theme.textMuted)}>Dose par clic</div>
+                  <select
+                    className={cn("mt-2 w-full rounded-2xl px-3 py-3 text-[13px] font-semibold", theme.surfaceInput)}
+                    value={cupMl}
+                    onChange={(e) => setCupMl(Number(e.target.value))}
+                  >
+                    <option value={200}>200 ml</option>
+                    <option value={250}>250 ml</option>
+                    <option value={330}>330 ml</option>
+                    <option value={500}>500 ml</option>
+                  </select>
+                </div>
+
+                <div className={cn("mt-3 text-[12px]", theme.textMuted)}>
+                  Appui long sur un verre : −{cupMl}ml.
+                </div>
+              </div>
+
+              {/* Timers */}
+              <div className={cn("rounded-[22px] p-4", theme.cardSoft)}>
+                <div className={cn("text-[13px] font-semibold", theme.textSecondary)}>Fréquence pauses yeux</div>
+                <select
+                  className={cn("mt-3 w-full rounded-2xl px-3 py-3 text-[13px] font-semibold", theme.surfaceInput)}
+                  value={eyeBreakInterval}
+                  onChange={(e) => {
+                    const v = Number(e.target.value);
+                    setEyeBreakInterval(v);
+                    setEyeBreakTimer((t) => Math.min(t, v));
+                    if (soundEnabled) playTone({ freq: 880, gain: 0.02 });
+                  }}
+                >
+                  <option value="1200">Toutes les 20 minutes</option>
+                  <option value="1800">Toutes les 30 minutes</option>
+                  <option value="2400">Toutes les 40 minutes</option>
+                </select>
+              </div>
+
+              <div className={cn("rounded-[22px] p-4", theme.cardSoft)}>
+                <div className={cn("text-[13px] font-semibold", theme.textSecondary)}>Fréquence étirements</div>
+                <select
+                  className={cn("mt-3 w-full rounded-2xl px-3 py-3 text-[13px] font-semibold", theme.surfaceInput)}
+                  value={stretchInterval}
+                  onChange={(e) => {
+                    const v = Number(e.target.value);
+                    setStretchInterval(v);
+                    setStretchTimer((t) => Math.min(t, v));
+                    if (soundEnabled) playTone({ freq: 660, gain: 0.02 });
+                  }}
+                >
+                  <option value="2400">Toutes les 40 minutes</option>
+                  <option value="3600">Toutes les 60 minutes</option>
+                  <option value="5400">Toutes les 90 minutes</option>
+                </select>
+              </div>
+
+              {/* Sound */}
+              <div className={cn("rounded-[22px] p-4 flex items-center justify-between", theme.cardSoft)}>
+                <div>
+                  <div className={cn("text-[13px] font-semibold", theme.textSecondary)}>Sons</div>
+                  <div className={cn("mt-1 text-[12px]", theme.textMuted)}>
+                    Sur le web, les sons nécessitent une première interaction utilisateur.
+                  </div>
+                </div>
+                <input
+                  type="checkbox"
+                  className="h-5 w-5 accent-black"
+                  checked={soundEnabled}
+                  onChange={(e) => {
+                    setSoundEnabled(e.target.checked);
+                    playTone({ freq: e.target.checked ? 740 : 520, gain: 0.02 });
+                  }}
+                />
+              </div>
+
+              {/* Bubbles */}
+              <div className={cn("rounded-[22px] p-4 flex items-center justify-between", theme.cardSoft)}>
+                <div>
+                  <div className={cn("text-[13px] font-semibold", theme.textSecondary)}>Bulles dans l’eau</div>
+                  <div className={cn("mt-1 text-[12px]", theme.textMuted)}>Effet visuel léger.</div>
+                </div>
+                <input
+                  type="checkbox"
+                  className="h-5 w-5 accent-black"
+                  checked={bubblesEnabled}
+                  onChange={(e) => setBubblesEnabled(e.target.checked)}
+                />
+              </div>
+            </div>
+
+            <button
+              onClick={() => setShowSettings(false)}
+              className={cn(
+                "mt-5 w-full rounded-2xl px-4 py-3 font-semibold text-[14px] transition",
+                theme.id === "neo"
+                  ? "border border-white/10 bg-gradient-to-b from-white/[0.12] to-white/[0.06] hover:from-white/[0.16] hover:to-white/[0.08]"
+                  : "border border-black/10 bg-black/[0.03] hover:bg-black/[0.05]"
+              )}
+            >
+              <span className={theme.textPrimary}>Fermer</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  /* =========================
    * Render
    * ========================= */
   return (
@@ -1351,12 +1718,15 @@ export default function ZenhydratationApp() {
         {activeTab === "home" && <HomeScreen />}
         {activeTab === "stats" && <StatsScreen />}
 
-        {/* Bottom nav (réglages uniquement ici) */}
+        {/* Bottom nav */}
         <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto px-5 pb-5">
           <div className={cn("rounded-[26px] px-6 py-4 flex items-center justify-around", theme.nav)}>
             <button
               onClick={() => setActiveTab("home")}
-              className={cn("flex flex-col items-center gap-1 transition", activeTab === "home" ? theme.textPrimary : theme.textMuted)}
+              className={cn(
+                "flex flex-col items-center gap-1 transition",
+                activeTab === "home" ? theme.textPrimary : theme.textMuted
+              )}
             >
               <Home className="h-6 w-6" />
               <span className="text-[11px] font-semibold">Accueil</span>
@@ -1364,7 +1734,10 @@ export default function ZenhydratationApp() {
 
             <button
               onClick={() => setActiveTab("stats")}
-              className={cn("flex flex-col items-center gap-1 transition", activeTab === "stats" ? theme.textPrimary : theme.textMuted)}
+              className={cn(
+                "flex flex-col items-center gap-1 transition",
+                activeTab === "stats" ? theme.textPrimary : theme.textMuted
+              )}
             >
               <TrendingUp className="h-6 w-6" />
               <span className="text-[11px] font-semibold">Stats</span>
@@ -1382,151 +1755,23 @@ export default function ZenhydratationApp() {
 
         <ExerciseModal />
         <RoutinePlayer />
+        <SettingsModal />
 
-        {/* Settings modal (contient le sélecteur de thème) */}
-        {showSettings && (
-          <div className="fixed inset-0 z-50">
-            <div className={cn("absolute inset-0", theme.modalBackdrop)} onClick={() => setShowSettings(false)} />
-            <div className="absolute inset-x-0 bottom-0">
-              <div className={cn("mx-auto max-w-md rounded-t-[32px] p-6", theme.card, "border-b-0")}>
-                <div className="flex items-center justify-between">
-                  <div className={cn("text-[18px] font-semibold", theme.textPrimary)}>Paramètres</div>
-                  <button
-                    onClick={() => setShowSettings(false)}
-                    className={cn(
-                      "h-10 w-10 rounded-2xl flex items-center justify-center transition",
-                      theme.cardSoft,
-                      theme.id === "neo" ? "hover:bg-white/[0.10]" : "hover:bg-black/[0.03]"
-                    )}
-                  >
-                    <X className={cn("h-5 w-5", theme.id === "neo" ? "text-white/75" : "text-gray-600")} />
-                  </button>
-                </div>
-
-                <div className="mt-5 space-y-4">
-                  {/* Theme selector */}
-                  <div className={cn("rounded-[22px] p-4", theme.cardSoft)}>
-                    <div className={cn("text-[13px] font-semibold", theme.textSecondary)}>Thème</div>
-                    <div className="mt-3 grid grid-cols-3 gap-2">
-                      {Object.values(THEMES).map((t) => (
-                        <button
-                          key={t.id}
-                          onClick={() => setThemeId(t.id)}
-                          className={cn(
-                            "rounded-2xl px-3 py-3 text-[12px] font-semibold transition border",
-                            t.id === themeId
-                              ? (theme.id === "neo" ? "border-white/20 bg-white/[0.10]" : "border-black/15 bg-black/[0.04]")
-                              : (theme.id === "neo" ? "border-white/10 bg-white/[0.06] hover:bg-white/[0.10]" : "border-black/10 bg-black/[0.02] hover:bg-black/[0.04]"),
-                            theme.textPrimary
-                          )}
-                        >
-                          {t.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className={cn("rounded-[22px] p-4", theme.cardSoft)}>
-                    <div className={cn("text-[13px] font-semibold", theme.textSecondary)}>Objectif hydratation</div>
-                    <div className="mt-3 flex items-center gap-3">
-                      <input
-                        type="range"
-                        min="6"
-                        max="12"
-                        value={waterGoal}
-                        onChange={(e) => {
-                          setWaterGoal(Number(e.target.value));
-                          if (soundEnabled) playTone({ freq: 600, gain: 0.02 });
-                        }}
-                        className="w-full"
-                      />
-                      <div className={cn("min-w-[52px] text-right text-[13px] font-semibold", theme.textPrimary)}>
-                        {waterGoal}
-                      </div>
-                    </div>
-                    <div className={cn("mt-2 text-[12px]", theme.textMuted)}>verres par jour</div>
-                  </div>
-
-                  <div className={cn("rounded-[22px] p-4", theme.cardSoft)}>
-                    <div className={cn("text-[13px] font-semibold", theme.textSecondary)}>Fréquence pauses yeux</div>
-                    <select
-                      className={cn("mt-3 w-full rounded-2xl px-3 py-3 text-[13px] font-semibold", theme.surfaceInput)}
-                      value={eyeBreakInterval}
-                      onChange={(e) => {
-                        const v = Number(e.target.value);
-                        setEyeBreakInterval(v);
-                        setEyeBreakTimer((t) => Math.min(t, v));
-                        if (soundEnabled) playTone({ freq: 880, gain: 0.02 });
-                      }}
-                    >
-                      <option value="1200">Toutes les 20 minutes</option>
-                      <option value="1800">Toutes les 30 minutes</option>
-                      <option value="2400">Toutes les 40 minutes</option>
-                    </select>
-                  </div>
-
-                  <div className={cn("rounded-[22px] p-4", theme.cardSoft)}>
-                    <div className={cn("text-[13px] font-semibold", theme.textSecondary)}>Fréquence étirements</div>
-                    <select
-                      className={cn("mt-3 w-full rounded-2xl px-3 py-3 text-[13px] font-semibold", theme.surfaceInput)}
-                      value={stretchInterval}
-                      onChange={(e) => {
-                        const v = Number(e.target.value);
-                        setStretchInterval(v);
-                        setStretchTimer((t) => Math.min(t, v));
-                        if (soundEnabled) playTone({ freq: 660, gain: 0.02 });
-                      }}
-                    >
-                      <option value="2400">Toutes les 40 minutes</option>
-                      <option value="3600">Toutes les 60 minutes</option>
-                      <option value="5400">Toutes les 90 minutes</option>
-                    </select>
-                  </div>
-
-                  <div className={cn("rounded-[22px] p-4 flex items-center justify-between", theme.cardSoft)}>
-                    <div>
-                      <div className={cn("text-[13px] font-semibold", theme.textSecondary)}>Sons</div>
-                      <div className={cn("mt-1 text-[12px]", theme.textMuted)}>
-                        Sur le web, les sons nécessitent une première interaction utilisateur.
-                      </div>
-                    </div>
-                    <input
-                      type="checkbox"
-                      className="h-5 w-5 accent-black"
-                      checked={soundEnabled}
-                      onChange={(e) => {
-                        setSoundEnabled(e.target.checked);
-                        playTone({ freq: e.target.checked ? 740 : 520, gain: 0.02 });
-                      }}
-                    />
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => setShowSettings(false)}
-                  className={cn(
-                    "mt-5 w-full rounded-2xl px-4 py-3 font-semibold text-[14px] transition",
-                    theme.id === "neo"
-                      ? "border border-white/10 bg-gradient-to-b from-white/[0.12] to-white/[0.06] hover:from-white/[0.16] hover:to-white/[0.08]"
-                      : "border border-black/10 bg-black/[0.03] hover:bg-black/[0.05]"
-                  )}
-                >
-                  <span className={theme.textPrimary}>Fermer</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Keyframes */}
+        <style>{`
+          @keyframes zh_wave {
+            0%   { transform: translateX(0) translateY(0); }
+            50%  { transform: translateX(10%) translateY(6%); }
+            100% { transform: translateX(0) translateY(0); }
+          }
+          @keyframes zh_bubble {
+            0%   { transform: translateY(0) scale(0.9); opacity: 0; }
+            20%  { opacity: 0.5; }
+            60%  { opacity: 0.35; }
+            100% { transform: translateY(-22px) scale(1.1); opacity: 0; }
+          }
+        `}</style>
       </div>
-
-      {/* Global keyframes for WaterGlasses wave */}
-      <style>{`
-        @keyframes zh_wave {
-          0%   { transform: translateX(0) translateY(0); }
-          50%  { transform: translateX(10%) translateY(6%); }
-          100% { transform: translateX(0) translateY(0); }
-        }
-      `}</style>
     </div>
   );
 }
@@ -1571,9 +1816,45 @@ function ShortcutTile({ title, subtitle, icon, glow = "cyan", theme, onClick }) 
 }
 
 /* =========================
- * Water glasses (animated fill)
+ * Avatar mood
  * ========================= */
-function WaterGlasses({ count, goal, onAdd, theme, size = "md" }) {
+function AvatarMood({ theme, avatar, energyScore }) {
+  const mood = energyScore < 35 ? "tired" : energyScore < 70 ? "ok" : "good";
+
+  const face = mood === "tired" ? "(-_-)" : mood === "ok" ? "(•‿•)" : "(^_^)";
+  const aura =
+    mood === "tired" ? "bg-rose-500/15"
+    : mood === "ok" ? "bg-amber-500/15"
+    : "bg-emerald-500/15";
+
+  const label = avatar === "male" ? "Homme" : "Femme";
+
+  return (
+    <div className="relative">
+      <div className={cn("absolute inset-0 rounded-full blur-2xl", aura)} />
+      <div className={cn("h-20 w-20 rounded-[26px] flex flex-col items-center justify-center", theme.cardSoft)}>
+        <div className={cn("text-[11px] font-semibold", theme.textMuted)}>{label}</div>
+        <div className={cn("mt-1 text-[22px] font-semibold", theme.textPrimary)}>
+          {face}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* =========================
+ * Water glasses (progress fill + long press undo + bubbles)
+ * ========================= */
+function WaterGlasses({
+  totalMl,
+  goalMl,
+  cupMl,
+  onAdd,
+  onRemove,
+  theme,
+  bubblesEnabled = true,
+  size = "md"
+}) {
   const dims =
     size === "sm"
       ? { h: 58, gap: 10 }
@@ -1602,28 +1883,64 @@ function WaterGlasses({ count, goal, onAdd, theme, size = "md" }) {
         ? "bg-white/70"
         : "bg-gray-100";
 
+  const maxCups = Math.max(1, Math.ceil(goalMl / Math.max(1, cupMl)));
+  const filledCups = Math.floor(totalMl / Math.max(1, cupMl));
+  const remainderMl = totalMl - filledCups * cupMl;
+  const partialPct = Math.max(0, Math.min(1, remainderMl / Math.max(1, cupMl)));
+
+  const longPressRef = useRef(null);
+  const longPressedRef = useRef(false);
+
+  const startLongPress = () => {
+    longPressedRef.current = false;
+    if (longPressRef.current) clearTimeout(longPressRef.current);
+    longPressRef.current = setTimeout(() => {
+      longPressedRef.current = true;
+      onRemove?.();
+    }, 450);
+  };
+
+  const endLongPress = () => {
+    if (longPressRef.current) clearTimeout(longPressRef.current);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (longPressRef.current) clearTimeout(longPressRef.current);
+    };
+  }, []);
+
   return (
     <div className="w-full">
       <div
         className="grid"
         style={{
-          gridTemplateColumns: `repeat(${goal}, minmax(0, 1fr))`,
+          gridTemplateColumns: `repeat(${maxCups}, minmax(0, 1fr))`,
           gap: dims.gap
         }}
       >
-        {Array.from({ length: goal }).map((_, i) => {
-          const filled = i < count;
+        {Array.from({ length: maxCups }).map((_, i) => {
+          const isFull = i < filledCups;
+          const isPartial = i === filledCups && partialPct > 0;
+          const fillPct = isFull ? 0.78 : isPartial ? 0.78 * partialPct : 0;
+
           return (
             <button
               key={i}
               type="button"
+              onMouseDown={startLongPress}
+              onMouseUp={endLongPress}
+              onMouseLeave={endLongPress}
+              onTouchStart={startLongPress}
+              onTouchEnd={endLongPress}
               onClick={() => {
-                if (!filled) onAdd?.();
+                if (longPressedRef.current) return;
+                onAdd?.();
               }}
               className="relative group"
               style={{ height: dims.h }}
-              aria-label={filled ? `Verre ${i + 1} rempli` : `Remplir verre ${i + 1}`}
-              title={filled ? "Déjà rempli" : "Ajouter un verre"}
+              aria-label="Hydratation: ajouter (clic) / annuler (appui long)"
+              title="Clic: +dose — Appui long: annuler"
             >
               <div className={cn("relative w-full h-full rounded-2xl border overflow-hidden", glassBg)}>
                 {/* highlight */}
@@ -1636,14 +1953,12 @@ function WaterGlasses({ count, goal, onAdd, theme, size = "md" }) {
 
                 {/* water fill */}
                 <div
-                  className={cn(
-                    "absolute left-0 right-0 bottom-0 transition-[height] duration-700 ease-out",
-                    filled ? "h-[78%]" : "h-0"
-                  )}
+                  className="absolute left-0 right-0 bottom-0 transition-[height] duration-700 ease-out"
+                  style={{ height: `${fillPct * 100}%` }}
                 >
                   <div className={cn("absolute inset-0 bg-gradient-to-b", fillColor)} />
 
-                  {/* wave overlay */}
+                  {/* wave overlays */}
                   <div className="absolute inset-0 overflow-hidden">
                     <div
                       className={cn(
@@ -1660,28 +1975,52 @@ function WaterGlasses({ count, goal, onAdd, theme, size = "md" }) {
                       style={{ animation: "zh_wave 3.2s ease-in-out infinite reverse" }}
                     />
                   </div>
+
+                  {/* bubbles */}
+                  {bubblesEnabled && (isFull || isPartial) && (
+                    <div className="absolute inset-0 pointer-events-none">
+                      <Bubble x="22%" delay="0s" />
+                      <Bubble x="48%" delay="0.6s" />
+                      <Bubble x="70%" delay="1.1s" />
+                    </div>
+                  )}
                 </div>
 
-                {/* empty hover hint */}
-                {!filled && (
-                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                    <span
-                      className={cn(
-                        "text-[11px] font-semibold px-2 py-1 rounded-full",
-                        theme.id === "neo"
-                          ? "bg-white/10 border border-white/10 text-white/80"
-                          : "bg-black/5 border border-black/10 text-gray-700"
-                      )}
-                    >
-                      +1
-                    </span>
-                  </div>
-                )}
+                {/* hint */}
+                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                  <span
+                    className={cn(
+                      "text-[11px] font-semibold px-2 py-1 rounded-full",
+                      theme.id === "neo"
+                        ? "bg-white/10 border border-white/10 text-white/80"
+                        : "bg-black/5 border border-black/10 text-gray-700"
+                    )}
+                  >
+                    + / −
+                  </span>
+                </div>
               </div>
             </button>
           );
         })}
       </div>
+
+      <div className={cn("mt-3 text-[12px]", theme.textMuted)}>
+        Clic: +{cupMl}ml • Appui long: −{cupMl}ml
+      </div>
     </div>
+  );
+}
+
+function Bubble({ x = "50%", delay = "0s" }) {
+  return (
+    <span
+      className="absolute bottom-2 w-2 h-2 rounded-full bg-white/35"
+      style={{
+        left: x,
+        animation: "zh_bubble 1.9s ease-in infinite",
+        animationDelay: delay
+      }}
+    />
   );
 }
