@@ -13,7 +13,12 @@ import {
   Check
 } from "lucide-react";
 import { Preferences } from "@capacitor/preferences";
-import { LocalNotifications } from "@capacitor/local-notifications";
+import {
+  ensureNotificationPermission,
+  cancelReminders,
+  scheduleNextReminders
+} from "./platform/notifications";
+
 import {
   ResponsiveContainer,
   BarChart,
