@@ -1,0 +1,21 @@
+{
+  "updatedAt": "2025-12-13T00:00:00Z",
+  "deals": [
+    {
+      "id": "deal-1",
+      "title": "Gourde isotherme (500–750ml)",
+      "category": "Hydratation",
+      "desc": "Pratique pour atteindre votre objectif quotidien, chaude/froide.",
+      "badge": "Indispensable",
+      "url": "https://www.amazon.fr/s?k=gourde+isotherme+inox"
+    },
+    {
+      "id": "deal-2",
+      "title": "Tapis d’étirement / yoga",
+      "category": "Étirements",
+      "desc": "Idéal pour intégrer 2 minutes de mobilité.",
+      "badge": "Mobilité",
+      "url": "https://www.amazon.fr/s?k=tapis+yoga"
+    }
+  ]
+}
