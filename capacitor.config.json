@@ -1,0 +1,6 @@
+{
+  "appId": "com.zenethydrate.app",
+  "appName": "Zen & Hydraté",
+  "webDir": "dist",
+  "server": { "androidScheme": "https" }
+}
