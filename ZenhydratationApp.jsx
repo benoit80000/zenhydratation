@@ -1805,29 +1805,46 @@ function ShortcutTile({ title, subtitle, icon, glow = "cyan", theme, onClick }) 
 /* =========================
  * Avatar mood
  * ========================= */
+/* =========================
+ * Avatar mood (emoji homme/femme + état qui évolue)
+ * ========================= */
 function AvatarMood({ theme, avatar, energyScore }) {
-  const mood = energyScore < 35 ? "tired" : energyScore < 70 ? "ok" : "good";
+  const person = avatar === "male" ? "👨" : "👩";
 
-  const face = mood === "tired" ? "(-_-)" : mood === "ok" ? "(•‿•)" : "(^_^)";
-  const aura =
-    mood === "tired" ? "bg-rose-500/15"
-    : mood === "ok" ? "bg-amber-500/15"
-    : "bg-emerald-500/15";
+  // 3 paliers (cohérents avec votre UI actuelle <35 / <70 / >=70)
+  const mood =
+    energyScore < 35
+      ? { key: "tired", label: "Fatigué", emoji: "😴", aura: "bg-rose-500/15" }
+      : energyScore < 70
+        ? { key: "ok", label: "En amélioration", emoji: "🙂", aura: "bg-amber-500/15" }
+        : { key: "good", label: "En forme", emoji: "😄", aura: "bg-emerald-500/15" };
 
-  const label = avatar === "male" ? "Homme" : "Femme";
+  const genderLabel = avatar === "male" ? "Homme" : "Femme";
 
   return (
     <div className="relative">
-      <div className={cn("absolute inset-0 rounded-full blur-2xl", aura)} />
-      <div className={cn("h-20 w-20 rounded-[26px] flex flex-col items-center justify-center", theme.cardSoft)}>
-        <div className={cn("text-[11px] font-semibold", theme.textMuted)}>{label}</div>
-        <div className={cn("mt-1 text-[22px] font-semibold", theme.textPrimary)}>
-          {face}
+      <div className={cn("absolute inset-0 rounded-full blur-2xl", mood.aura)} />
+      <div
+        className={cn(
+          "h-20 w-20 rounded-[26px] flex flex-col items-center justify-center",
+          theme.cardSoft
+        )}
+        aria-label={`Avatar ${genderLabel}, ${mood.label}`}
+        title={`${genderLabel} • ${mood.label}`}
+      >
+        <div className={cn("text-[11px] font-semibold", theme.textMuted)}>
+          {genderLabel}
+        </div>
+
+        <div className={cn("mt-1 text-[26px] font-semibold", theme.textPrimary)} style={{ lineHeight: 1 }}>
+          <span aria-hidden="true">{person}</span>{" "}
+          <span aria-hidden="true">{mood.emoji}</span>
         </div>
       </div>
     </div>
   );
 }
+
 
 /* =========================
  * Water glasses (progress fill + long press undo + bubbles)
