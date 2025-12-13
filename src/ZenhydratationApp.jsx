@@ -34,7 +34,8 @@ import {
  * - Appui long sur un verre = annuler (retirer une dose)
  * - Bulles optionnelles
  * - Avatar homme/femme + énergie (fatigue) qui s’améliore avec hydratation + routines
- * - Home: Tuiles uniformes (ordre: Énergie, Hydratation, Yeux, Étirements, Réveil, Coucher)
+ * - Home: 6 tuiles pleine largeur (même format que la tuile “Pause yeux”/Hero) empilées
+ *   ordre: Énergie, Hydratation, Yeux, Étirements, Réveil, Coucher
  * ==========================================================
  */
 
@@ -331,12 +332,12 @@ export default function ZenhydratationApp() {
   const [stretchInterval, setStretchInterval] = useState(3600);
   const [soundEnabled, setSoundEnabled] = useState(true);
 
-  // NEW: hydration as ml
+  // hydration as ml
   const [cupMl, setCupMl] = useState(250);
   const [dailyGoalMl, setDailyGoalMl] = useState(2000);
   const [waterMl, setWaterMl] = useState(0);
 
-  // NEW: avatar + bubbles
+  // avatar + bubbles
   const [avatar, setAvatar] = useState("female"); // "female" | "male"
   const [bubblesEnabled, setBubblesEnabled] = useState(true);
 
@@ -895,7 +896,7 @@ export default function ZenhydratationApp() {
           </button>
         </div>
 
-        {/* Hero */}
+        {/* Hero (Pause yeux / Étirements) */}
         <div className={cn("mt-6 rounded-[28px] p-6", theme.card)}>
           <div className="flex items-center gap-5">
             <GlassIconPlate glow={heroTheme.glow} theme={theme}>
@@ -934,25 +935,18 @@ export default function ZenhydratationApp() {
           </div>
         </div>
 
-        {/* Tuiles uniformes (ordre demandé) */}
-        <div className="mt-6">
-          <div className="grid grid-cols-2 gap-4">
-            {/* 1) Énergie */}
-            <div className={cn("w-full h-full min-h-[180px] rounded-[24px] p-4 flex flex-col justify-between", theme.card)}>
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className={cn("text-[16px] font-semibold", theme.textPrimary)}>Énergie</div>
-                  <div className={cn("mt-1 text-[12px] font-semibold", theme.textMuted)}>
-                    {energyScore < 35 ? "Fatigué" : energyScore < 70 ? "En amélioration" : "En forme"}
-                  </div>
+        {/* 6 tuiles pleine largeur (même format que le Hero) */}
+        <div className="mt-6 space-y-4">
+          {/* 1) Énergie */}
+          <div className={cn("rounded-[28px] p-6", theme.card)}>
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0 flex-1">
+                <div className={cn("text-[28px] font-semibold leading-none", theme.textPrimary)}>Énergie</div>
+                <div className={cn("mt-2 text-[18px] font-medium", theme.textSecondary)}>
+                  {energyScore < 35 ? "Fatigué" : energyScore < 70 ? "En amélioration" : "En forme"} • {energyScore}%
                 </div>
-                <div className="shrink-0">
-                  <AvatarMood theme={theme} avatar={avatar} energyScore={energyScore} />
-                </div>
-              </div>
 
-              <div className="mt-3">
-                <div className={cn("h-3 rounded-full overflow-hidden", theme.id === "neo" ? "bg-white/10" : "bg-black/10")}>
+                <div className={cn("mt-4 h-3 rounded-full overflow-hidden", theme.id === "neo" ? "bg-white/10" : "bg-black/10")}>
                   <div
                     className={cn(
                       "h-full rounded-full transition-[width] duration-700 ease-out",
@@ -963,104 +957,121 @@ export default function ZenhydratationApp() {
                     style={{ width: `${energyScore}%` }}
                   />
                 </div>
+
                 <div className={cn("mt-2 text-[12px]", theme.textMuted)}>
-                  Score: <span className={cn("font-semibold", theme.textSecondary)}>{energyScore}%</span>
+                  Hydratation + routines = récupération progressive.
                 </div>
+              </div>
+
+              <div className="shrink-0">
+                <AvatarMood theme={theme} avatar={avatar} energyScore={energyScore} />
               </div>
             </div>
-
-            {/* 2) Hydratation */}
-            <div className={cn("w-full h-full min-h-[180px] rounded-[24px] p-4 flex flex-col justify-between", theme.card)}>
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className={cn("text-[16px] font-semibold", theme.textPrimary)}>Hydratation</div>
-                  <div className={cn("mt-1 text-[12px] font-semibold", theme.textMuted)}>
-                    {waterMl} / {dailyGoalMl} ml • {Math.max(0, Math.min(100, hydrationPct))}%
-                  </div>
-                  <div className={cn("mt-1 text-[12px]", theme.textMuted)}>
-                    Dose: {cupMl}ml • {waterCount} dose{waterCount > 1 ? "s" : ""}
-                  </div>
-                </div>
-
-                <div className="shrink-0">
-                  <GlassIconPlate glow="cyan" theme={theme}>
-                    {theme.id === "neo"
-                      ? <Droplets className="h-6 w-6 text-white/85" />
-                      : <Droplets className="h-6 w-6 text-cyan-600" />}
-                  </GlassIconPlate>
-                </div>
-              </div>
-
-              <div className="mt-3">
-                <WaterGlasses
-                  totalMl={waterMl}
-                  goalMl={dailyGoalMl}
-                  cupMl={cupMl}
-                  onAdd={addWater}
-                  onRemove={removeWater}
-                  bubblesEnabled={bubblesEnabled}
-                  theme={theme}
-                  size="sm"
-                />
-              </div>
-            </div>
-
-            {/* 3) Yeux */}
-            <ShortcutTile
-              title="Yeux"
-              subtitle={formatTime(eyeBreakTimer)}
-              glow="violet"
-              theme={theme}
-              icon={
-                theme.id === "neo"
-                  ? <Eye className="h-6 w-6 text-white/85" />
-                  : <Eye className="h-6 w-6 text-violet-600" />
-              }
-              onClick={() => setShowExercise("eye")}
-            />
-
-            {/* 4) Étirements */}
-            <ShortcutTile
-              title="Étirements"
-              subtitle={formatTime(stretchTimer)}
-              glow="emerald"
-              theme={theme}
-              icon={
-                theme.id === "neo"
-                  ? <Activity className="h-6 w-6 text-white/85" />
-                  : <Activity className="h-6 w-6 text-emerald-600" />
-              }
-              onClick={() => setShowExercise("stretch")}
-            />
-
-            {/* 5) Réveil */}
-            <ShortcutTile
-              title="Réveil"
-              subtitle={`${exercises.wake.length} étapes`}
-              glow="amber"
-              theme={theme}
-              icon={
-                theme.id === "neo"
-                  ? <Sun className="h-6 w-6 text-white/85" />
-                  : <Sun className="h-6 w-6 text-amber-600" />
-              }
-              onClick={() => startQueue("wake", exercises.wake)}
-            />
-
-            {/* 6) Coucher */}
-            <ShortcutTile
-              title="Coucher"
-              subtitle={`${exercises.sleep.length} étapes`}
-              glow="indigo"
-              theme={theme}
-              icon={
-                theme.id === "neo"
-                  ? <Moon className="h-6 w-6 text-white/85" />
-                  : <Moon className="h-6 w-6 text-indigo-600" />
-              }
-              onClick={() => startQueue("sleep", exercises.sleep)}
-            />
           </div>
+
+          {/* 2) Hydratation */}
+          <div className={cn("rounded-[28px] p-6", theme.card)}>
+            <div className="flex items-center gap-5">
+              <GlassIconPlate glow="cyan" theme={theme}>
+                {theme.id === "neo"
+                  ? <Droplets className="h-6 w-6 text-white/85" />
+                  : <Droplets className="h-6 w-6 text-cyan-600" />}
+              </GlassIconPlate>
+
+              <div className="flex-1 min-w-0">
+                <div className={cn("text-[28px] font-semibold leading-none", theme.textPrimary)}>
+                  Hydratation
+                </div>
+                <div className={cn("mt-2 text-[18px] font-medium", theme.textSecondary)}>
+                  {waterMl} / {dailyGoalMl} ml • {Math.max(0, Math.min(100, hydrationPct))}%
+                </div>
+                <div className={cn("mt-1 text-[12px]", theme.textMuted)}>
+                  Dose: {cupMl}ml • {waterCount} dose{waterCount > 1 ? "s" : ""}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4">
+              <WaterGlasses
+                totalMl={waterMl}
+                goalMl={dailyGoalMl}
+                cupMl={cupMl}
+                onAdd={addWater}
+                onRemove={removeWater}
+                bubblesEnabled={bubblesEnabled}
+                theme={theme}
+                size="md"
+              />
+            </div>
+
+            <button
+              onClick={addWater}
+              className={cn(
+                "mt-5 w-full rounded-2xl px-4 py-3 font-semibold text-[14px] transition",
+                theme.id === "neo"
+                  ? "border border-white/10 bg-gradient-to-b from-white/[0.12] to-white/[0.06] hover:from-white/[0.16] hover:to-white/[0.08]"
+                  : "border border-black/10 bg-black/[0.03] hover:bg-black/[0.05]"
+              )}
+            >
+              <span className={theme.textPrimary}>+ Ajouter une dose</span>
+            </button>
+          </div>
+
+          {/* 3) Yeux */}
+          <LargeActionTile
+            theme={theme}
+            title="Yeux"
+            subtitle={`Prochaine pause dans ${formatTime(eyeBreakTimer)}`}
+            glow="violet"
+            icon={
+              theme.id === "neo"
+                ? <Eye className="h-6 w-6 text-white/85" />
+                : <Eye className="h-6 w-6 text-violet-600" />
+            }
+            onClick={() => setShowExercise("eye")}
+          />
+
+          {/* 4) Étirements */}
+          <LargeActionTile
+            theme={theme}
+            title="Étirements"
+            subtitle={`Prochain dans ${formatTime(stretchTimer)}`}
+            glow="emerald"
+            icon={
+              theme.id === "neo"
+                ? <Activity className="h-6 w-6 text-white/85" />
+                : <Activity className="h-6 w-6 text-emerald-600" />
+            }
+            onClick={() => setShowExercise("stretch")}
+          />
+
+          {/* 5) Réveil */}
+          <LargeActionTile
+            theme={theme}
+            title="Réveil"
+            subtitle={`${exercises.wake.length} étapes`}
+            glow="amber"
+            icon={
+              theme.id === "neo"
+                ? <Sun className="h-6 w-6 text-white/85" />
+                : <Sun className="h-6 w-6 text-amber-600" />
+            }
+            onClick={() => startQueue("wake", exercises.wake)}
+          />
+
+          {/* 6) Coucher */}
+          <LargeActionTile
+            theme={theme}
+            title="Coucher"
+            subtitle={`${exercises.sleep.length} étapes`}
+            glow="indigo"
+            icon={
+              theme.id === "neo"
+                ? <Moon className="h-6 w-6 text-white/85" />
+                : <Moon className="h-6 w-6 text-indigo-600" />
+            }
+            onClick={() => startQueue("sleep", exercises.sleep)}
+          />
         </div>
 
         <div className={cn("mt-7 text-[14px] leading-snug", theme.textMuted)}>
@@ -1761,9 +1772,9 @@ export default function ZenhydratationApp() {
 }
 
 /* =========================
- * Shortcut tile (uniform size)
+ * Large action tile (même format que le Hero)
  * ========================= */
-function ShortcutTile({ title, subtitle, icon, glow = "cyan", theme, onClick }) {
+function LargeActionTile({ theme, title, subtitle, icon, glow = "cyan", onClick }) {
   const glowMap = {
     cyan: "bg-cyan-400/20",
     violet: "bg-violet-500/20",
@@ -1775,14 +1786,14 @@ function ShortcutTile({ title, subtitle, icon, glow = "cyan", theme, onClick }) 
   return (
     <button
       onClick={onClick}
+      type="button"
       className={cn(
-        "group w-full h-full min-h-[180px] rounded-[24px] p-4 text-left transition active:scale-[0.99] flex flex-col justify-between",
+        "w-full rounded-[28px] p-6 text-left transition active:scale-[0.99]",
         theme.card,
         theme.id === "neo" ? "hover:bg-white/[0.10]" : "hover:bg-black/[0.03]"
       )}
-      type="button"
     >
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-5">
         <div className="relative">
           <div className={cn("absolute inset-0 rounded-full blur-2xl", glowMap[glow] ?? glowMap.cyan)} />
           <div className={cn("h-11 w-11 rounded-2xl flex items-center justify-center", theme.cardSoft)}>
@@ -1790,14 +1801,10 @@ function ShortcutTile({ title, subtitle, icon, glow = "cyan", theme, onClick }) 
           </div>
         </div>
 
-        <div className="min-w-0">
-          <div className={cn("text-[16px] font-semibold leading-tight truncate", theme.textPrimary)}>{title}</div>
-          <div className={cn("mt-1 text-[13px] font-semibold leading-none truncate", theme.textMuted)}>{subtitle}</div>
+        <div className="flex-1 min-w-0">
+          <div className={cn("text-[28px] font-semibold leading-none", theme.textPrimary)}>{title}</div>
+          <div className={cn("mt-2 text-[18px] font-medium", theme.textSecondary)}>{subtitle}</div>
         </div>
-      </div>
-
-      <div className={cn("text-[12px] font-semibold", theme.textMuted)}>
-        Ouvrir
       </div>
     </button>
   );
@@ -1822,14 +1829,14 @@ function AvatarMood({ theme, avatar, energyScore }) {
     <div className="relative">
       <div className={cn("absolute inset-0 rounded-full blur-2xl", mood.aura)} />
       <div
-        className={cn("h-20 w-20 rounded-[26px] flex flex-col items-center justify-center", theme.cardSoft)}
+        className={cn(
+          "h-20 w-20 rounded-[26px] flex flex-col items-center justify-center",
+          theme.cardSoft
+        )}
         aria-label={`Avatar ${genderLabel}, ${mood.label}`}
         title={`${genderLabel} • ${mood.label}`}
       >
-        <div className={cn("text-[11px] font-semibold", theme.textMuted)}>
-          {genderLabel}
-        </div>
-
+        <div className={cn("text-[11px] font-semibold", theme.textMuted)}>{genderLabel}</div>
         <div className={cn("mt-1 text-[26px] font-semibold", theme.textPrimary)} style={{ lineHeight: 1 }}>
           <span aria-hidden="true">{person}</span>{" "}
           <span aria-hidden="true">{mood.emoji}</span>
@@ -1854,7 +1861,7 @@ function WaterGlasses({
 }) {
   const dims =
     size === "sm"
-      ? { h: 56, gap: 8 }
+      ? { h: 58, gap: 10 }
       : size === "lg"
         ? { h: 78, gap: 12 }
         : { h: 68, gap: 12 };
@@ -1940,18 +1947,22 @@ function WaterGlasses({
               title="Clic: +dose — Appui long: annuler"
             >
               <div className={cn("relative w-full h-full rounded-2xl border overflow-hidden", glassBg)}>
+                {/* highlight */}
                 <div className="absolute inset-0 pointer-events-none">
                   <div className="absolute left-1 top-2 bottom-2 w-[22%] rounded-full bg-white/10" />
                 </div>
 
+                {/* rim */}
                 <div className={cn("absolute top-0 left-0 right-0 h-[10%] opacity-60", rim)} />
 
+                {/* water fill */}
                 <div
                   className="absolute left-0 right-0 bottom-0 transition-[height] duration-700 ease-out"
                   style={{ height: `${fillPct * 100}%` }}
                 >
                   <div className={cn("absolute inset-0 bg-gradient-to-b", fillColor)} />
 
+                  {/* wave overlays */}
                   <div className="absolute inset-0 overflow-hidden">
                     <div
                       className={cn(
@@ -1969,6 +1980,7 @@ function WaterGlasses({
                     />
                   </div>
 
+                  {/* bubbles */}
                   {bubblesEnabled && (isFull || isPartial) && (
                     <div className="absolute inset-0 pointer-events-none">
                       <Bubble x="22%" delay="0s" />
@@ -1978,6 +1990,7 @@ function WaterGlasses({
                   )}
                 </div>
 
+                {/* hint */}
                 <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                   <span
                     className={cn(
