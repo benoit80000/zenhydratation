@@ -896,45 +896,6 @@ export default function ZenhydratationApp() {
           </button>
         </div>
 
-        {/* Hero (Pause yeux / Étirements) */}
-        <div className={cn("mt-6 rounded-[28px] p-6", theme.card)}>
-          <div className="flex items-center gap-5">
-            <GlassIconPlate glow={heroTheme.glow} theme={theme}>
-              {theme.id === "neo"
-                ? React.cloneElement(heroTheme.icon, { className: "h-6 w-6 text-white/85" })
-                : heroTheme.icon}
-            </GlassIconPlate>
-
-            <div className="flex-1 min-w-0">
-              <div className={cn("text-[28px] font-semibold leading-none", theme.textPrimary)}>
-                {nextHero.label}
-              </div>
-              <div className={cn("mt-2 text-[18px] font-medium", theme.textSecondary)}>
-                Dans {nextHero.time}
-              </div>
-            </div>
-
-            <ProgressRing pct={nextHero.pct} size={56} stroke={7} glowClass={heroTheme.ring} theme={theme} />
-          </div>
-
-          <div className="mt-6 flex justify-end">
-            <button
-              onClick={() => {
-                setShowExercise(nextHero.type);
-                if (soundEnabled) playTone({ freq: 520, gain: 0.02 });
-              }}
-              className={cn(
-                "rounded-full px-10 py-3 text-[16px] font-semibold tracking-wide transition shadow-[0_14px_30px_rgba(0,0,0,0.25)]",
-                theme.id === "neo"
-                  ? "border border-white/10 bg-gradient-to-b from-white/[0.10] to-white/[0.06] hover:from-white/[0.14] hover:to-white/[0.08]"
-                  : "border border-black/10 bg-black/[0.03] hover:bg-black/[0.05]"
-              )}
-            >
-              <span className={theme.textPrimary}>DÉMARRER</span>
-            </button>
-          </div>
-        </div>
-
         {/* 6 tuiles pleine largeur (même format que le Hero) */}
         <div className="mt-6 space-y-4">
           {/* 1) Énergie */}
@@ -1017,7 +978,19 @@ export default function ZenhydratationApp() {
             </button>
           </div>
 
-        
+          {/* 3) Yeux */}
+          <LargeActionTile
+            theme={theme}
+            title="Yeux"
+            subtitle={`Prochaine pause dans ${formatTime(eyeBreakTimer)}`}
+            glow="violet"
+            icon={
+              theme.id === "neo"
+                ? <Eye className="h-6 w-6 text-white/85" />
+                : <Eye className="h-6 w-6 text-violet-600" />
+            }
+            onClick={() => setShowExercise("eye")}
+          />
 
           {/* 4) Étirements */}
           <LargeActionTile
