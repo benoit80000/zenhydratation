@@ -47,7 +47,7 @@ import DealsPage from "./DealsPage";
 /* =========================
  * Config Bons Plans (JSON distant)
  * ========================= */
-const DEALS_REMOTE_URL = "https://example.com/zenhydratation-deals.json";
+const DEALS_REMOTE_URL = "https://zenhydratation.vercel.app/zenhydratation-deals.json";
 
 /* =========================
  * Storage
