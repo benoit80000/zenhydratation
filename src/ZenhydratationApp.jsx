@@ -765,10 +765,7 @@ export default function ZenhydratationApp() {
                 <span className={cn("text-[13px] font-semibold", theme.textPrimary)}>{streak}j</span>
               </div>
 
-              <div className={cn("rounded-2xl px-4 py-2", theme.cardSoft)}>
-                <span className={cn("text-[13px] font-semibold", theme.textSecondary)}>Mode</span>{" "}
-                <span className={cn("text-[13px] font-semibold", theme.textPrimary)}>Offline</span>
-              </div>
+            
             </div>
           </div>
 
