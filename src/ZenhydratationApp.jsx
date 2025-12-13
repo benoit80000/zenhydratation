@@ -1017,19 +1017,7 @@ export default function ZenhydratationApp() {
             </button>
           </div>
 
-          {/* 3) Yeux */}
-          <LargeActionTile
-            theme={theme}
-            title="Yeux"
-            subtitle={`Prochaine pause dans ${formatTime(eyeBreakTimer)}`}
-            glow="violet"
-            icon={
-              theme.id === "neo"
-                ? <Eye className="h-6 w-6 text-white/85" />
-                : <Eye className="h-6 w-6 text-violet-600" />
-            }
-            onClick={() => setShowExercise("eye")}
-          />
+        
 
           {/* 4) Étirements */}
           <LargeActionTile
