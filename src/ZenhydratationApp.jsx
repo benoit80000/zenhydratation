@@ -1,8 +1,3 @@
-/* ===============================
-   ZenhydratationApp.jsx
-   Web offline – version finale
-   =============================== */
-
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Droplets,
@@ -29,86 +24,117 @@ import {
   Legend
 } from "recharts";
 
-/* ===============================
-   Storage helpers
-   =============================== */
-const STATE_KEY = "zenhydratation_state_v2";
-const HISTORY_KEY = "zenhydratation_history_v2";
+/**
+ * =========================
+ * Web-safe offline storage
+ * (Vercel OK / offline OK)
+ * =========================
+ */
+const STORAGE_STATE_KEY = "zenhydratation_state_v2";
+const STORAGE_HISTORY_KEY = "zenhydratation_history_v2";
 
-const readLS = (k, d) => {
+function safeParse(json, fallback) {
   try {
-    const v = localStorage.getItem(k);
-    return v ? JSON.parse(v) : d;
+    return JSON.parse(json);
   } catch {
-    return d;
+    return fallback;
   }
-};
-const writeLS = (k, v) => localStorage.setItem(k, JSON.stringify(v));
-
-const dayKey = (d = new Date()) =>
-  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
-    d.getDate()
-  ).padStart(2, "0")}`;
-
-const isActiveDay = (d) =>
-  d.water > 0 ||
-  d.eyeBreaks > 0 ||
-  d.stretches > 0 ||
-  d.wakeRoutines > 0 ||
-  d.sleepRoutines > 0;
-
-const computeStreak = (history) => {
-  let s = 0;
-  let c = new Date();
-  const map = new Map(history.map((h) => [h.dayKey, h]));
-  while (true) {
-    const k = dayKey(c);
-    if (!map.has(k) || !isActiveDay(map.get(k))) break;
-    s++;
-    c.setDate(c.getDate() - 1);
-  }
-  return s;
-};
-
-/* ===============================
-   Web Audio (alertes sonores)
-   =============================== */
-let audioCtx = null;
-function playSound(freq = 880, duration = 200) {
-  try {
-    if (!audioCtx)
-      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const o = audioCtx.createOscillator();
-    const g = audioCtx.createGain();
-    o.type = "sine";
-    o.frequency.value = freq;
-    g.gain.value = 0.05;
-    o.connect(g);
-    g.connect(audioCtx.destination);
-    o.start();
-    setTimeout(() => {
-      o.stop();
-    }, duration);
-  } catch {}
 }
 
-/* ===============================
-   Component
-   =============================== */
+function readLS(key, fallback) {
+  if (typeof window === "undefined") return fallback;
+  const v = window.localStorage.getItem(key);
+  if (!v) return fallback;
+  return safeParse(v, fallback);
+}
+
+function writeLS(key, value) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(key, JSON.stringify(value));
+}
+
+/**
+ * =========================
+ * Date helpers
+ * =========================
+ */
+function dayKey(d = new Date()) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`; // YYYY-MM-DD
+}
+
+function addDays(d, delta) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + delta);
+}
+
+function isActiveDay(entry) {
+  return (
+    (entry.water ?? 0) > 0 ||
+    (entry.eyeBreaks ?? 0) > 0 ||
+    (entry.stretches ?? 0) > 0 ||
+    (entry.wakeRoutines ?? 0) > 0 ||
+    (entry.sleepRoutines ?? 0) > 0
+  );
+}
+
+function computeStreak(history, today = new Date()) {
+  const map = new Map(history.map((e) => [e.dayKey, e]));
+  let streak = 0;
+  let cursor = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+  while (true) {
+    const dk = dayKey(cursor);
+    const e = map.get(dk);
+    if (!e || !isActiveDay(e)) break;
+    streak += 1;
+    cursor = addDays(cursor, -1);
+  }
+  return streak;
+}
+
+function clampInt(n, min, max) {
+  const v = Number(n);
+  if (Number.isNaN(v)) return min;
+  return Math.min(max, Math.max(min, Math.floor(v)));
+}
+
+/**
+ * =========================
+ * Component
+ * =========================
+ */
 export default function ZenhydratationApp() {
-  /* ---------- Settings ---------- */
+  const [activeTab, setActiveTab] = useState("home");
+
+  // Settings (réels, modifiables)
   const [waterGoal, setWaterGoal] = useState(8);
-  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [eyeBreakInterval, setEyeBreakInterval] = useState(1200); // 20 min
+  const [stretchInterval, setStretchInterval] = useState(3600); // 60 min
+  const [soundEnabled, setSoundEnabled] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
 
-  /* ---------- State ---------- */
-  const [activeTab, setActiveTab] = useState("home");
+  // State
   const [waterCount, setWaterCount] = useState(0);
-  const [showExercise, setShowExercise] = useState(null);
-  const [activeExercise, setActiveExercise] = useState(null);
+  const [eyeBreakTimer, setEyeBreakTimer] = useState(1200);
+  const [stretchTimer, setStretchTimer] = useState(3600);
+  const [isPaused, setIsPaused] = useState(false);
+
+  const [showNotif, setShowNotif] = useState(null); // "eye" | "stretch" | null
+  const [showExercise, setShowExercise] = useState(null); // "eye" | "stretch" | "wake" | "sleep" | null
   const [showSettings, setShowSettings] = useState(false);
 
-  const [today, setToday] = useState({
+  // Exercice actif (un exercice choisi)
+  // { type, exId, name, desc, durationSec, remaining }
+  const [activeExercise, setActiveExercise] = useState(null);
+
+  // Historique & streak (zéro fictif)
+  const [history, setHistory] = useState([]);
+  const [streak, setStreak] = useState(0);
+
+  // Stats du jour (zéro fictif) + détail par exercice + routines
+  const [todayStats, setTodayStats] = useState({
     dayKey: dayKey(),
     water: 0,
     eyeBreaks: 0,
@@ -119,178 +145,717 @@ export default function ZenhydratationApp() {
     details: { eye: {}, stretch: {}, wake: {}, sleep: {} }
   });
 
-  const [history, setHistory] = useState([]);
-  const [streak, setStreak] = useState(0);
+  const saveDebounceRef = useRef(null);
+  const lastDayRef = useRef(dayKey());
 
-  /* ---------- Exercises ---------- */
   const exercises = useMemo(
     () => ({
-      eye: [
-        { id: "eye-2020", name: "Règle 20-20-20", sec: 20, desc: "Regardez à 6 mètres pendant 20 secondes" },
-        { id: "eye-blink", name: "Clignements", sec: 20, desc: "Clignez lentement des yeux" },
-        { id: "eye-massage", name: "Massage des yeux", sec: 20, desc: "Massez doucement les tempes" }
-      ],
       stretch: [
-        { id: "st-neck", name: "Rotation du cou", sec: 30, desc: "Tournez lentement la tête" },
-        { id: "st-shoulders", name: "Épaules", sec: 30, desc: "Roulez les épaules" },
-        { id: "st-back", name: "Dos", sec: 30, desc: "Penchez-vous doucement" }
+        { id: "st-neck", name: "Rotation du cou", durationSec: 30, desc: "Tournez lentement la tête de gauche à droite" },
+        { id: "st-shoulders", name: "Étirement des épaules", durationSec: 30, desc: "Roulez vos épaules en arrière puis en avant" },
+        { id: "st-arms", name: "Étirement des bras", durationSec: 30, desc: "Tendez les bras devant vous, entrelacez les doigts" },
+        { id: "st-back", name: "Flexion du dos", durationSec: 30, desc: "Debout, penchez-vous vers l'avant doucement" }
+      ],
+      eye: [
+        { id: "eye-2020", name: "Règle 20-20-20", durationSec: 20, desc: "Regardez un objet à 6 mètres pendant 20 secondes" },
+        { id: "eye-blink", name: "Clignements", durationSec: 20, desc: "Clignez des yeux 10 fois lentement" },
+        { id: "eye-massage", name: "Massage des yeux", durationSec: 20, desc: "Fermez les yeux et massez doucement les tempes" }
       ],
       wake: [
-        { id: "wk-breath", name: "Respiration réveil", sec: 60, desc: "Respiration profonde et énergisante" },
-        { id: "wk-mobility", name: "Mobilité douce", sec: 60, desc: "Bougez les articulations" }
+        { id: "wk-breath", name: "Respiration énergisante", durationSec: 60, desc: "Respirez profondément : inspirez par le nez, expirez lentement." },
+        { id: "wk-mobility", name: "Mobilité douce", durationSec: 60, desc: "Bougez doucement cou, épaules, hanches (sans douleur)." },
+        { id: "wk-posture", name: "Activation posturale", durationSec: 45, desc: "Redressez-vous, engagez les omoplates, respiration calme." }
       ],
       sleep: [
-        { id: "sl-breath", name: "Respiration calme", sec: 60, desc: "Respiration lente" },
-        { id: "sl-relax", name: "Scan corporel", sec: 90, desc: "Détendez chaque partie du corps" }
+        { id: "sl-breath", name: "Respiration calmante", durationSec: 60, desc: "Inspirez 4s, expirez 6s, relâchez les épaules." },
+        { id: "sl-neck", name: "Détente nuque/épaules", durationSec: 45, desc: "Relâchez la nuque, épaules basses, micro-rotations lentes." },
+        { id: "sl-scan", name: "Scan corporel", durationSec: 90, desc: "Parcourez mentalement le corps, relâchez chaque zone." }
       ]
     }),
     []
   );
 
-  /* ---------- Load ---------- */
-  useEffect(() => {
-    const h = readLS(HISTORY_KEY, []);
-    setHistory(h);
-    setStreak(computeStreak(h));
+  const exerciseLabelById = useMemo(() => {
+    const map = {};
+    for (const ex of exercises.eye) map[ex.id] = ex.name;
+    for (const ex of exercises.stretch) map[ex.id] = ex.name;
+    for (const ex of exercises.wake) map[ex.id] = ex.name;
+    for (const ex of exercises.sleep) map[ex.id] = ex.name;
+    return map;
+  }, [exercises]);
 
-    const s = readLS(STATE_KEY, null);
-    if (s && s.today?.dayKey === dayKey()) {
-      setToday(s.today);
-      setWaterCount(s.waterCount ?? 0);
-      setWaterGoal(s.waterGoal ?? 8);
-      setSoundEnabled(s.soundEnabled ?? true);
-      setDarkMode(s.darkMode ?? false);
+  /**
+   * =========================
+   * Load state + history (offline web)
+   * =========================
+   */
+  useEffect(() => {
+    const loadedHistory = readLS(STORAGE_HISTORY_KEY, []);
+    const h = Array.isArray(loadedHistory) ? loadedHistory : [];
+    setHistory(h);
+    setStreak(computeStreak(h, new Date()));
+
+    const s = readLS(STORAGE_STATE_KEY, null);
+    if (!s) return;
+
+    // settings
+    if (typeof s.waterGoal === "number") setWaterGoal(clampInt(s.waterGoal, 6, 12));
+    if (typeof s.eyeBreakInterval === "number") setEyeBreakInterval(clampInt(s.eyeBreakInterval, 600, 7200));
+    if (typeof s.stretchInterval === "number") setStretchInterval(clampInt(s.stretchInterval, 900, 10800));
+    if (typeof s.soundEnabled === "boolean") setSoundEnabled(s.soundEnabled);
+    if (typeof s.darkMode === "boolean") setDarkMode(s.darkMode);
+
+    // restore only if same day (sinon on repart à 0)
+    const current = dayKey();
+    if (s.todayStats?.dayKey === current) {
+      setTodayStats({
+        dayKey: current,
+        water: clampInt(s.todayStats.water ?? 0, 0, 500),
+        eyeBreaks: clampInt(s.todayStats.eyeBreaks ?? 0, 0, 500),
+        stretches: clampInt(s.todayStats.stretches ?? 0, 0, 500),
+        wakeRoutines: clampInt(s.todayStats.wakeRoutines ?? 0, 0, 500),
+        sleepRoutines: clampInt(s.todayStats.sleepRoutines ?? 0, 0, 500),
+        workTime: clampInt(s.todayStats.workTime ?? 0, 0, 24 * 3600),
+        details: {
+          eye: (s.todayStats.details?.eye && typeof s.todayStats.details.eye === "object") ? s.todayStats.details.eye : {},
+          stretch: (s.todayStats.details?.stretch && typeof s.todayStats.details.stretch === "object") ? s.todayStats.details.stretch : {},
+          wake: (s.todayStats.details?.wake && typeof s.todayStats.details.wake === "object") ? s.todayStats.details.wake : {},
+          sleep: (s.todayStats.details?.sleep && typeof s.todayStats.details.sleep === "object") ? s.todayStats.details.sleep : {}
+        }
+      });
+      setWaterCount(clampInt(s.waterCount ?? 0, 0, 200));
+      setEyeBreakTimer(clampInt(s.eyeBreakTimer ?? 1200, 1, 7200));
+      setStretchTimer(clampInt(s.stretchTimer ?? 3600, 1, 10800));
+      setIsPaused(!!s.isPaused);
+    } else {
+      // nouveau jour : timers reset aux intervalles
+      setTodayStats({
+        dayKey: current,
+        water: 0,
+        eyeBreaks: 0,
+        stretches: 0,
+        wakeRoutines: 0,
+        sleepRoutines: 0,
+        workTime: 0,
+        details: { eye: {}, stretch: {}, wake: {}, sleep: {} }
+      });
+      setWaterCount(0);
+      setEyeBreakTimer(s.eyeBreakInterval ?? 1200);
+      setStretchTimer(s.stretchInterval ?? 3600);
+      setIsPaused(false);
     }
   }, []);
 
-  /* ---------- Save ---------- */
+  /**
+   * =========================
+   * Save state (debounced)
+   * =========================
+   */
   useEffect(() => {
-    writeLS(STATE_KEY, {
-      today,
-      waterCount,
+    const payload = {
       waterGoal,
+      eyeBreakInterval,
+      stretchInterval,
       soundEnabled,
-      darkMode
-    });
-  }, [today, waterCount, waterGoal, soundEnabled, darkMode]);
+      darkMode,
+      waterCount,
+      eyeBreakTimer,
+      stretchTimer,
+      isPaused,
+      todayStats
+    };
 
-  /* ---------- History ---------- */
+    if (saveDebounceRef.current) clearTimeout(saveDebounceRef.current);
+    saveDebounceRef.current = setTimeout(() => {
+      writeLS(STORAGE_STATE_KEY, payload);
+    }, 250);
+
+    return () => {
+      if (saveDebounceRef.current) clearTimeout(saveDebounceRef.current);
+    };
+  }, [
+    waterGoal,
+    eyeBreakInterval,
+    stretchInterval,
+    soundEnabled,
+    darkMode,
+    waterCount,
+    eyeBreakTimer,
+    stretchTimer,
+    isPaused,
+    todayStats
+  ]);
+
+  /**
+   * =========================
+   * Upsert today into history (max 30)
+   * =========================
+   */
   useEffect(() => {
-    const next = [...history.filter((h) => h.dayKey !== today.dayKey), today]
-      .slice(-30);
-    setHistory(next);
-    setStreak(computeStreak(next));
-    writeLS(HISTORY_KEY, next);
-  }, [today]);
+    const current = todayStats.dayKey;
+    setHistory((prev) => {
+      const without = prev.filter((e) => e.dayKey !== current);
+      const next = [...without, todayStats].sort((a, b) => (a.dayKey < b.dayKey ? -1 : 1));
+      const trimmed = next.slice(Math.max(0, next.length - 30));
+      writeLS(STORAGE_HISTORY_KEY, trimmed);
+      setStreak(computeStreak(trimmed, new Date()));
+      return trimmed;
+    });
+  }, [todayStats]);
 
-  /* ---------- Exercise runner ---------- */
+  /**
+   * =========================
+   * Rollover day if app stays open
+   * =========================
+   */
+  useEffect(() => {
+    const id = setInterval(() => {
+      const current = dayKey();
+      if (lastDayRef.current !== current) {
+        lastDayRef.current = current;
+        setTodayStats({
+          dayKey: current,
+          water: 0,
+          eyeBreaks: 0,
+          stretches: 0,
+          wakeRoutines: 0,
+          sleepRoutines: 0,
+          workTime: 0,
+          details: { eye: {}, stretch: {}, wake: {}, sleep: {} }
+        });
+        setWaterCount(0);
+        setEyeBreakTimer(eyeBreakInterval);
+        setStretchTimer(stretchInterval);
+        setShowNotif(null);
+        setShowExercise(null);
+        setActiveExercise(null);
+        setIsPaused(false);
+      }
+    }, 30_000);
+    return () => clearInterval(id);
+  }, [eyeBreakInterval, stretchInterval]);
+
+  /**
+   * =========================
+   * Main timers
+   * =========================
+   */
+  useEffect(() => {
+    if (isPaused) return;
+
+    const id = setInterval(() => {
+      setEyeBreakTimer((prev) => {
+        if (prev <= 1) {
+          triggerNotification("eye");
+          return eyeBreakInterval;
+        }
+        return prev - 1;
+      });
+
+      setStretchTimer((prev) => {
+        if (prev <= 1) {
+          triggerNotification("stretch");
+          return stretchInterval;
+        }
+        return prev - 1;
+      });
+
+      setTodayStats((s) => ({ ...s, workTime: s.workTime + 1 }));
+    }, 1000);
+
+    return () => clearInterval(id);
+  }, [isPaused, eyeBreakInterval, stretchInterval]);
+
+  function playBeep(type) {
+    if (!soundEnabled) return;
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = "sine";
+      o.frequency.value = type === "eye" ? 880 : type === "stretch" ? 660 : type === "wake" ? 740 : 520;
+      g.gain.value = 0.03;
+      o.connect(g);
+      g.connect(ctx.destination);
+      o.start();
+      setTimeout(() => {
+        o.stop();
+        ctx.close();
+      }, 200);
+    } catch {
+      // ignore
+    }
+  }
+
+  const triggerNotification = (type) => {
+    setShowNotif(type);
+    playBeep(type);
+    setTimeout(() => setShowNotif(null), 6000);
+  };
+
+  /**
+   * =========================
+   * Exercise runner (selected exercise)
+   * =========================
+   */
   useEffect(() => {
     if (!activeExercise) return;
 
+    const totalKeyMap = {
+      eye: "eyeBreaks",
+      stretch: "stretches",
+      wake: "wakeRoutines",
+      sleep: "sleepRoutines"
+    };
+
     const id = setInterval(() => {
-      setActiveExercise((e) => {
-        if (!e) return null;
-        if (e.remaining <= 1) {
-          const group = e.type;
-          const totalKey = {
-            eye: "eyeBreaks",
-            stretch: "stretches",
-            wake: "wakeRoutines",
-            sleep: "sleepRoutines"
-          }[group];
+      setActiveExercise((prev) => {
+        if (!prev) return null;
 
-          setToday((t) => ({
-            ...t,
-            [totalKey]: t[totalKey] + 1,
-            details: {
-              ...t.details,
-              [group]: {
-                ...t.details[group],
-                [e.id]: (t.details[group][e.id] ?? 0) + 1
+        if (prev.remaining <= 1) {
+          const group = prev.type;
+          const totalKey = totalKeyMap[group];
+
+          setTodayStats((s) => {
+            const currentCount = (s.details?.[group]?.[prev.exId] ?? 0) + 1;
+            return {
+              ...s,
+              [totalKey]: (s[totalKey] ?? 0) + 1,
+              details: {
+                ...(s.details ?? { eye: {}, stretch: {}, wake: {}, sleep: {} }),
+                [group]: {
+                  ...((s.details ?? { eye: {}, stretch: {}, wake: {}, sleep: {} })[group] ?? {}),
+                  [prev.exId]: currentCount
+                }
               }
-            }
-          }));
+            };
+          });
 
-          if (soundEnabled) playSound(660);
+          // petit feedback sonore fin d'exercice
+          playBeep(group);
+
           return null;
         }
-        return { ...e, remaining: e.remaining - 1 };
+
+        return { ...prev, remaining: prev.remaining - 1 };
       });
     }, 1000);
 
     return () => clearInterval(id);
-  }, [activeExercise, soundEnabled]);
+  }, [activeExercise]); // (soundEnabled déjà dans playBeep)
 
-  /* ---------- UI ---------- */
-  return (
-    <div className={`${darkMode ? "bg-gray-900 text-white" : "bg-gray-50"} min-h-screen max-w-md mx-auto`}>
+  /**
+   * =========================
+   * Actions
+   * =========================
+   */
+  const addWater = () => {
+    if (waterCount < waterGoal) {
+      setWaterCount((v) => v + 1);
+      setTodayStats((s) => ({ ...s, water: s.water + 1 }));
+      playBeep("wake");
+    }
+  };
+
+  const completeEyeBreak = () => {
+    // Notif in-app => crédite une pause yeux (sans détail par exercice)
+    setTodayStats((s) => ({ ...s, eyeBreaks: s.eyeBreaks + 1 }));
+    setShowNotif(null);
+    playBeep("eye");
+  };
+
+  const completeStretch = () => {
+    // Notif in-app => crédite un étirement (sans détail par exercice)
+    setTodayStats((s) => ({ ...s, stretches: s.stretches + 1 }));
+    setShowNotif(null);
+    playBeep("stretch");
+  };
+
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${String(secs).padStart(2, "0")}`;
+  };
+
+  /**
+   * =========================
+   * Stats computations (no fake)
+   * =========================
+   */
+  const lastNDays = (n) => {
+    const sorted = [...history].sort((a, b) => (a.dayKey < b.dayKey ? -1 : 1));
+    return sorted.slice(Math.max(0, sorted.length - n));
+  };
+
+  const window7 = lastNDays(7);
+  const window30 = lastNDays(30);
+
+  const sum = (arr, k) => arr.reduce((acc, x) => acc + (x[k] ?? 0), 0);
+
+  const chart7 = window7.map((d) => ({
+    day: d.dayKey.slice(5), // MM-DD
+    water: d.water ?? 0,
+    eye: d.eyeBreaks ?? 0,
+    stretch: d.stretches ?? 0,
+    wake: d.wakeRoutines ?? 0,
+    sleep: d.sleepRoutines ?? 0
+  }));
+
+  const chart30 = window30.map((d) => ({
+    day: d.dayKey.slice(5),
+    water: d.water ?? 0,
+    eye: d.eyeBreaks ?? 0,
+    stretch: d.stretches ?? 0,
+    wake: d.wakeRoutines ?? 0,
+    sleep: d.sleepRoutines ?? 0
+  }));
+
+  /**
+   * =========================
+   * Screens
+   * =========================
+   */
+  const HomeScreen = () => (
+    <div className="p-6 space-y-6">
       {/* Header */}
-      <div className="p-6">
-        <h1 className="text-2xl font-bold">Zenhydratation</h1>
-        <p className="text-sm opacity-70">Bien-être quotidien</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className={`text-2xl font-bold ${darkMode ? "text-gray-100" : "text-gray-800"}`}>
+            Zenhydratation
+          </h1>
+          <p className={`text-sm ${darkMode ? "text-gray-300" : "text-gray-600"}`}>
+            Hydratation, pauses yeux, étirements + routines
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowSettings(true)}
+            className={`p-3 rounded-full ${darkMode ? "bg-gray-700 hover:bg-gray-600" : "bg-gray-200 hover:bg-gray-300"} transition-colors`}
+          >
+            <Settings size={20} className={darkMode ? "text-gray-200" : "text-gray-700"} />
+          </button>
+          <button
+            onClick={() => setIsPaused((p) => !p)}
+            className={`p-3 rounded-full ${isPaused ? "bg-green-500" : darkMode ? "bg-gray-600" : "bg-gray-300"} transition-colors`}
+            title={isPaused ? "Reprendre" : "Pause"}
+          >
+            {isPaused ? <Play size={20} className="text-white" /> : <Pause size={20} className={darkMode ? "text-gray-100" : "text-gray-700"} />}
+          </button>
+        </div>
       </div>
 
-      {/* Streak */}
-      <div className="mx-6 mb-4 bg-orange-500 text-white rounded-xl p-4">
-        🔥 Série : <b>{streak}</b> jour{streak > 1 && "s"}
+      {/* Streak (calculated) */}
+      <div className="bg-gradient-to-r from-amber-400 to-orange-500 rounded-2xl p-4 text-white shadow-lg flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="text-3xl">🔥</div>
+          <div>
+            <p className="text-sm opacity-90">Série en cours</p>
+            <p className="text-2xl font-bold">{streak} jour{streak > 1 ? "s" : ""}</p>
+          </div>
+        </div>
+        <div className="text-right">
+          <p className="text-xs opacity-90">Basé sur l’historique</p>
+          <p className="text-sm font-semibold">Offline</p>
+        </div>
       </div>
 
-      {/* Water */}
-      <div className="mx-6 mb-4 bg-blue-500 text-white rounded-xl p-4">
-        Eau : {waterCount}/{waterGoal}
+      {/* Hydratation */}
+      <div className="bg-gradient-to-br from-blue-400 to-blue-600 rounded-3xl p-6 text-white shadow-lg">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Droplets size={24} />
+            <h2 className="text-lg font-semibold">Hydratation</h2>
+          </div>
+          <span className="text-sm opacity-90">{waterCount}/{waterGoal} verres</span>
+        </div>
+
+        <div className="flex gap-2 mb-4">
+          {Array.from({ length: waterGoal }).map((_, i) => (
+            <div
+              key={i}
+              className={`h-10 flex-1 rounded-lg ${i < waterCount ? "bg-white" : "bg-white/20"} transition-all`}
+            />
+          ))}
+        </div>
+
         <button
-          onClick={() => {
-            setWaterCount((c) => c + 1);
-            setToday((t) => ({ ...t, water: t.water + 1 }));
-            if (soundEnabled) playSound(880);
-          }}
-          className="block w-full bg-white text-blue-600 mt-3 py-2 rounded"
+          onClick={addWater}
+          className="w-full bg-white text-blue-600 py-3 rounded-xl font-semibold hover:bg-blue-50 transition-colors"
         >
-          + J’ai bu
+          + J'ai bu un verre
         </button>
       </div>
 
-      {/* Routines */}
-      <div className="mx-6 grid grid-cols-2 gap-4">
-        {[
-          ["eye", "Yeux", Eye],
-          ["stretch", "Étirements", Activity],
-          ["wake", "Réveil", Sun],
-          ["sleep", "Coucher", Moon]
-        ].map(([k, label, Icon]) => (
-          <button
-            key={k}
-            onClick={() => setShowExercise(k)}
-            className="bg-white rounded-xl p-4 shadow text-left"
-          >
-            <Icon size={24} className="mb-2" />
-            <div className="font-semibold">{label}</div>
-          </button>
-        ))}
+      {/* Timers (Yeux / Étirements) */}
+      <div className="grid grid-cols-2 gap-4">
+        <button
+          onClick={() => setShowExercise("eye")}
+          className="bg-gradient-to-br from-purple-400 to-purple-600 rounded-2xl p-5 text-white shadow-lg text-left hover:scale-105 transition-transform"
+        >
+          <Eye size={28} className="mb-3" />
+          <p className="text-xs mb-2 opacity-90">Pause yeux dans</p>
+          <p className="text-2xl font-bold mb-3">{formatTime(eyeBreakTimer)}</p>
+          <div className="h-2 bg-white/20 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-white transition-all"
+              style={{ width: `${((eyeBreakInterval - eyeBreakTimer) / eyeBreakInterval) * 100}%` }}
+            />
+          </div>
+          <p className="mt-3 text-xs opacity-90">Choisir un exercice</p>
+        </button>
+
+        <button
+          onClick={() => setShowExercise("stretch")}
+          className="bg-gradient-to-br from-green-400 to-green-600 rounded-2xl p-5 text-white shadow-lg text-left hover:scale-105 transition-transform"
+        >
+          <Activity size={28} className="mb-3" />
+          <p className="text-xs mb-2 opacity-90">Étirement dans</p>
+          <p className="text-2xl font-bold mb-3">{formatTime(stretchTimer)}</p>
+          <div className="h-2 bg-white/20 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-white transition-all"
+              style={{ width: `${((stretchInterval - stretchTimer) / stretchInterval) * 100}%` }}
+            />
+          </div>
+          <p className="mt-3 text-xs opacity-90">Choisir un exercice</p>
+        </button>
       </div>
 
-      {/* Exercise modal */}
+      {/* NEW: Routines (Réveil / Coucher) - same visual style */}
+      <div className="grid grid-cols-2 gap-4">
+        <button
+          onClick={() => setShowExercise("wake")}
+          className="bg-gradient-to-br from-yellow-400 to-orange-500 rounded-2xl p-5 text-white shadow-lg text-left hover:scale-105 transition-transform"
+        >
+          <Sun size={28} className="mb-3" />
+          <p className="text-xs mb-2 opacity-90">Routine</p>
+          <p className="text-2xl font-bold mb-1">Réveil</p>
+          <p className="text-xs opacity-90">Énergie + posture</p>
+        </button>
+
+        <button
+          onClick={() => setShowExercise("sleep")}
+          className="bg-gradient-to-br from-indigo-500 to-blue-700 rounded-2xl p-5 text-white shadow-lg text-left hover:scale-105 transition-transform"
+        >
+          <Moon size={28} className="mb-3" />
+          <p className="text-xs mb-2 opacity-90">Routine</p>
+          <p className="text-2xl font-bold mb-1">Coucher</p>
+          <p className="text-xs opacity-90">Calme + relâchement</p>
+        </button>
+      </div>
+
+      {/* Today stats */}
+      <div className={`${darkMode ? "bg-gray-800 border-gray-700" : "bg-white border-gray-100"} rounded-2xl p-5 shadow-md border`}>
+        <h3 className={`font-semibold mb-4 ${darkMode ? "text-gray-100" : "text-gray-800"}`}>Aujourd'hui</h3>
+        <div className="space-y-3">
+          <RowStat icon={<Droplets size={20} className="text-blue-600" />} label="Eau bue" value={`${todayStats.water} verre${todayStats.water > 1 ? "s" : ""}`} darkMode={darkMode} />
+          <RowStat icon={<Eye size={20} className="text-purple-600" />} label="Pauses yeux" value={`${todayStats.eyeBreaks}`} darkMode={darkMode} />
+          <RowStat icon={<Activity size={20} className="text-green-600" />} label="Étirements" value={`${todayStats.stretches}`} darkMode={darkMode} />
+          <RowStat icon={<Sun size={20} className="text-orange-600" />} label="Routine réveil" value={`${todayStats.wakeRoutines}`} darkMode={darkMode} />
+          <RowStat icon={<Moon size={20} className="text-indigo-600" />} label="Routine coucher" value={`${todayStats.sleepRoutines}`} darkMode={darkMode} />
+        </div>
+      </div>
+    </div>
+  );
+
+  const DetailBlock = ({ title, groupKey }) => {
+    const entries = Object.entries(todayStats.details?.[groupKey] ?? {});
+    return (
+      <div className="space-y-2">
+        <p className={`${darkMode ? "text-gray-300" : "text-gray-600"} text-sm font-semibold`}>{title}</p>
+        {entries.length === 0 ? (
+          <p className={`${darkMode ? "text-gray-300" : "text-gray-600"} text-sm`}>Aucun exercice effectué.</p>
+        ) : (
+          <div className="space-y-2">
+            {entries.map(([id, count]) => (
+              <div key={id} className="flex justify-between text-sm">
+                <span className={darkMode ? "text-gray-200" : "text-gray-800"}>{exerciseLabelById[id] ?? id}</span>
+                <span className={darkMode ? "text-gray-200" : "text-gray-800"}>{count}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const StatsScreen = () => {
+    const workH = Math.floor(todayStats.workTime / 3600);
+    const workM = Math.floor((todayStats.workTime % 3600) / 60);
+
+    const w7 = window7.length ? window7 : [];
+    const w30 = window30.length ? window30 : [];
+
+    return (
+      <div className="p-6 space-y-6">
+        <h1 className={`text-2xl font-bold ${darkMode ? "text-gray-100" : "text-gray-800"}`}>Statistiques</h1>
+
+        <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-3xl p-6 text-white shadow-lg">
+          <Clock size={28} className="mb-3" />
+          <p className="text-sm opacity-90 mb-1">Temps de travail aujourd'hui</p>
+          <p className="text-3xl font-bold">{workH}h {workM}m</p>
+        </div>
+
+        {/* Détail par exercice (aujourd'hui) */}
+        <div className={`${darkMode ? "bg-gray-800 border-gray-700" : "bg-white border-gray-100"} rounded-2xl p-5 shadow-md border`}>
+          <h3 className={`font-semibold mb-4 ${darkMode ? "text-gray-100" : "text-gray-800"}`}>Détail des exercices (aujourd’hui)</h3>
+          <div className="space-y-4">
+            <DetailBlock title="Yeux" groupKey="eye" />
+            <DetailBlock title="Étirements" groupKey="stretch" />
+            <DetailBlock title="Routine réveil" groupKey="wake" />
+            <DetailBlock title="Routine coucher" groupKey="sleep" />
+          </div>
+        </div>
+
+        {/* Résumé 7 jours */}
+        <div className={`${darkMode ? "bg-gray-800 border-gray-700" : "bg-white border-gray-100"} rounded-2xl p-5 shadow-md border`}>
+          <h3 className={`font-semibold mb-3 ${darkMode ? "text-gray-100" : "text-gray-800"}`}>Résumé 7 jours</h3>
+          <div className={`text-sm ${darkMode ? "text-gray-300" : "text-gray-600"} grid grid-cols-5 gap-3`}>
+            <div><span className="font-semibold">{sum(w7, "water")}</span><div>Eau</div></div>
+            <div><span className="font-semibold">{sum(w7, "eyeBreaks")}</span><div>Yeux</div></div>
+            <div><span className="font-semibold">{sum(w7, "stretches")}</span><div>Étire</div></div>
+            <div><span className="font-semibold">{sum(w7, "wakeRoutines")}</span><div>Réveil</div></div>
+            <div><span className="font-semibold">{sum(w7, "sleepRoutines")}</span><div>Coucher</div></div>
+          </div>
+        </div>
+
+        {/* Graphique 7 jours */}
+        <div className={`${darkMode ? "bg-gray-800 border-gray-700" : "bg-white border-gray-100"} rounded-2xl p-5 shadow-md border`}>
+          <h3 className={`font-semibold mb-4 ${darkMode ? "text-gray-100" : "text-gray-800"}`}>Graphique 7 jours</h3>
+          {chart7.length === 0 ? (
+            <p className={darkMode ? "text-gray-300 text-sm" : "text-gray-600 text-sm"}>
+              Aucune donnée pour l’instant (tout commence à 0).
+            </p>
+          ) : (
+            <div style={{ width: "100%", height: 260 }}>
+              <ResponsiveContainer>
+                <BarChart data={chart7}>
+                  <XAxis dataKey="day" />
+                  <YAxis allowDecimals={false} />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="water" name="Eau" />
+                  <Bar dataKey="eye" name="Yeux" />
+                  <Bar dataKey="stretch" name="Étirements" />
+                  <Bar dataKey="wake" name="Réveil" />
+                  <Bar dataKey="sleep" name="Coucher" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </div>
+
+        {/* Graphique 30 jours */}
+        <div className={`${darkMode ? "bg-gray-800 border-gray-700" : "bg-white border-gray-100"} rounded-2xl p-5 shadow-md border`}>
+          <h3 className={`font-semibold mb-4 ${darkMode ? "text-gray-100" : "text-gray-800"}`}>Graphique 30 jours</h3>
+          {chart30.length === 0 ? (
+            <p className={darkMode ? "text-gray-300 text-sm" : "text-gray-600 text-sm"}>
+              Aucune donnée sur 30 jours pour l’instant.
+            </p>
+          ) : (
+            <div style={{ width: "100%", height: 260 }}>
+              <ResponsiveContainer>
+                <BarChart data={chart30}>
+                  <XAxis dataKey="day" />
+                  <YAxis allowDecimals={false} />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="water" name="Eau" />
+                  <Bar dataKey="eye" name="Yeux" />
+                  <Bar dataKey="stretch" name="Étirements" />
+                  <Bar dataKey="wake" name="Réveil" />
+                  <Bar dataKey="sleep" name="Coucher" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  /**
+   * =========================
+   * Render
+   * =========================
+   */
+  return (
+    <div className={`${darkMode ? "bg-gray-900" : "bg-gray-50"} max-w-md mx-auto min-h-screen relative`}>
+      {/* In-app Notifications */}
+      {showNotif === "eye" && (
+        <NotifCard
+          icon={<Eye size={24} className="text-purple-600" />}
+          title="Temps de repos !"
+          subtitle="Reposez vos yeux 20 secondes"
+          text="Regardez au loin (6 mètres) pendant 20 secondes"
+          color="purple"
+          onClose={() => setShowNotif(null)}
+          onDone={completeEyeBreak}
+        />
+      )}
+
+      {showNotif === "stretch" && (
+        <NotifCard
+          icon={<Activity size={24} className="text-green-600" />}
+          title="Temps de bouger !"
+          subtitle="Faites des étirements"
+          text="Levez-vous et étirez-vous pendant 2 minutes"
+          color="green"
+          onClose={() => setShowNotif(null)}
+          onDone={completeStretch}
+        />
+      )}
+
+      {/* Exercise list modal (click to start) */}
       {showExercise && (
-        <div className="fixed inset-0 bg-black/50 flex items-end z-50">
-          <div className="bg-white w-full rounded-t-3xl p-6">
-            <h3 className="text-xl font-bold mb-4">Choisir un exercice</h3>
+        <div className="fixed inset-0 bg-black/50 flex items-end z-50" onClick={() => setShowExercise(null)}>
+          <div
+            className={`${darkMode ? "bg-gray-900 text-gray-100" : "bg-white"} rounded-t-3xl w-full max-w-md mx-auto p-6 max-h-[80vh] overflow-y-auto`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold">
+                {showExercise === "eye"
+                  ? "👁️ Exercices pour les yeux"
+                  : showExercise === "stretch"
+                    ? "🤸 Exercices d'étirement"
+                    : showExercise === "wake"
+                      ? "🌅 Routine réveil"
+                      : "🌙 Routine coucher"}
+              </h3>
+              <button onClick={() => setShowExercise(null)}>
+                <X size={24} className={darkMode ? "text-gray-300" : "text-gray-400"} />
+              </button>
+            </div>
+
             <div className="space-y-3">
-              {exercises[showExercise].map((ex) => (
+              {exercises[showExercise].map((exercise) => (
                 <button
-                  key={ex.id}
+                  key={exercise.id}
                   onClick={() => {
                     setActiveExercise({
-                      ...ex,
                       type: showExercise,
-                      remaining: ex.sec
+                      exId: exercise.id,
+                      name: exercise.name,
+                      desc: exercise.desc,
+                      durationSec: exercise.durationSec,
+                      remaining: exercise.durationSec
                     });
                     setShowExercise(null);
-                    if (soundEnabled) playSound(520);
+                    playBeep(showExercise);
                   }}
-                  className="w-full text-left p-4 bg-gray-100 rounded-xl"
+                  className={`${darkMode ? "bg-gray-800 border-gray-700" : "bg-gray-50 border-gray-100"} w-full text-left rounded-xl p-4 border hover:scale-[1.01] transition`}
                 >
-                  <div className="font-semibold">{ex.name}</div>
-                  <div className="text-sm text-gray-600">{ex.desc}</div>
+                  <div className="flex items-start justify-between mb-2">
+                    <h4 className="font-semibold">{exercise.name}</h4>
+                    <span className="text-xs bg-blue-100 text-blue-600 px-2 py-1 rounded-full">
+                      {exercise.durationSec}s
+                    </span>
+                  </div>
+                  <p className={darkMode ? "text-gray-300 text-sm" : "text-gray-600 text-sm"}>{exercise.desc}</p>
+                  <p className="mt-2 text-xs text-blue-600 font-semibold">Démarrer</p>
                 </button>
               ))}
             </div>
@@ -298,65 +863,224 @@ export default function ZenhydratationApp() {
         </div>
       )}
 
-      {/* Active exercise */}
+      {/* Active exercise fullscreen */}
       {activeExercise && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 text-center w-80">
-            <h2 className="text-xl font-bold mb-2">{activeExercise.name}</h2>
-            <p className="text-sm mb-4">{activeExercise.desc}</p>
-            <div className="text-5xl font-bold text-blue-600 mb-4">
-              {activeExercise.remaining}s
+          <div className="bg-white rounded-2xl p-6 w-80 text-center space-y-4">
+            <h2 className="text-xl font-bold">{activeExercise.name}</h2>
+            <p className="text-gray-600">{activeExercise.desc}</p>
+            <div className="text-5xl font-bold text-blue-600">{activeExercise.remaining}s</div>
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => setActiveExercise(null)}
+                className="flex-1 py-2 rounded-lg bg-gray-200 text-gray-800 font-semibold"
+              >
+                Arrêter
+              </button>
+
+              <button
+                onClick={() => {
+                  // "Suivant" = recommence le même exercice (ou vous pouvez le supprimer si inutile)
+                  setActiveExercise((e) => (e ? { ...e, remaining: e.durationSec } : e));
+                  playBeep(activeExercise.type);
+                }}
+                className="flex-1 py-2 rounded-lg bg-blue-600 text-white font-semibold"
+              >
+                Refaire
+              </button>
             </div>
-            <button
-              onClick={() => setActiveExercise(null)}
-              className="w-full bg-gray-300 py-2 rounded"
-            >
-              Arrêter
-            </button>
           </div>
         </div>
       )}
 
-      {/* Bottom nav */}
-      <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white border-t p-4 flex justify-around">
-        <button onClick={() => setActiveTab("home")}><Home /></button>
-        <button onClick={() => setActiveTab("stats")}><TrendingUp /></button>
-        <button onClick={() => setShowSettings(true)}><Settings /></button>
+      {/* Settings modal */}
+      {showSettings && (
+        <div className="fixed inset-0 bg-black/50 flex items-end z-50" onClick={() => setShowSettings(false)}>
+          <div
+            className={`${darkMode ? "bg-gray-900 text-gray-100" : "bg-white"} rounded-t-3xl w-full max-w-md mx-auto p-6`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-bold">Paramètres</h3>
+              <button onClick={() => setShowSettings(false)}>
+                <X size={24} className={darkMode ? "text-gray-300" : "text-gray-400"} />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className={`${darkMode ? "bg-gray-800" : "bg-gray-50"} rounded-xl p-4`}>
+                <label className="block text-sm font-semibold mb-2">Objectif d'hydratation</label>
+                <input
+                  type="range"
+                  min="6"
+                  max="12"
+                  value={waterGoal}
+                  onChange={(e) => setWaterGoal(Number(e.target.value))}
+                  className="w-full"
+                />
+                <p className={darkMode ? "text-gray-300 text-xs mt-1" : "text-gray-500 text-xs mt-1"}>
+                  {waterGoal} verres par jour
+                </p>
+              </div>
+
+              <div className={`${darkMode ? "bg-gray-800" : "bg-gray-50"} rounded-xl p-4`}>
+                <label className="block text-sm font-semibold mb-2">Fréquence pauses yeux</label>
+                <select
+                  className={`w-full p-2 border rounded-lg ${darkMode ? "bg-gray-900 border-gray-700" : "bg-white border-gray-200"}`}
+                  value={eyeBreakInterval}
+                  onChange={(e) => {
+                    const v = Number(e.target.value);
+                    setEyeBreakInterval(v);
+                    setEyeBreakTimer((t) => Math.min(t, v));
+                    playBeep("eye");
+                  }}
+                >
+                  <option value="1200">Toutes les 20 minutes</option>
+                  <option value="1800">Toutes les 30 minutes</option>
+                  <option value="2400">Toutes les 40 minutes</option>
+                </select>
+              </div>
+
+              <div className={`${darkMode ? "bg-gray-800" : "bg-gray-50"} rounded-xl p-4`}>
+                <label className="block text-sm font-semibold mb-2">Fréquence étirements</label>
+                <select
+                  className={`w-full p-2 border rounded-lg ${darkMode ? "bg-gray-900 border-gray-700" : "bg-white border-gray-200"}`}
+                  value={stretchInterval}
+                  onChange={(e) => {
+                    const v = Number(e.target.value);
+                    setStretchInterval(v);
+                    setStretchTimer((t) => Math.min(t, v));
+                    playBeep("stretch");
+                  }}
+                >
+                  <option value="2400">Toutes les 40 minutes</option>
+                  <option value="3600">Toutes les 60 minutes</option>
+                  <option value="5400">Toutes les 90 minutes</option>
+                </select>
+              </div>
+
+              <div className={`${darkMode ? "bg-gray-800" : "bg-gray-50"} rounded-xl p-4 flex items-center justify-between`}>
+                <div>
+                  <p className="font-semibold">Notifications sonores</p>
+                  <p className={darkMode ? "text-gray-300 text-xs" : "text-gray-500 text-xs"}>
+                    Bip discret en web (nécessite une interaction)
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  className="w-5 h-5"
+                  checked={soundEnabled}
+                  onChange={(e) => {
+                    setSoundEnabled(e.target.checked);
+                    // interaction => permet l'audio ensuite
+                    playBeep(e.target.checked ? "wake" : "sleep");
+                  }}
+                />
+              </div>
+
+              <div className={`${darkMode ? "bg-gray-800" : "bg-gray-50"} rounded-xl p-4 flex items-center justify-between`}>
+                <div>
+                  <p className="font-semibold">Mode sombre</p>
+                  <p className={darkMode ? "text-gray-300 text-xs" : "text-gray-500 text-xs"}>Interface en mode nuit</p>
+                </div>
+                <input
+                  type="checkbox"
+                  className="w-5 h-5"
+                  checked={darkMode}
+                  onChange={(e) => setDarkMode(e.target.checked)}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Main content */}
+      <div className="pb-20">
+        {activeTab === "home" && <HomeScreen />}
+        {activeTab === "stats" && <StatsScreen />}
       </div>
 
-      {/* Settings */}
-      {showSettings && (
-        <div className="fixed inset-0 bg-black/50 flex items-end z-50">
-          <div className="bg-white w-full rounded-t-3xl p-6">
-            <h3 className="text-xl font-bold mb-4">Paramètres</h3>
+      {/* Bottom nav */}
+      <div className={`${darkMode ? "bg-gray-900 border-gray-800" : "bg-white border-gray-200"} fixed bottom-0 left-0 right-0 max-w-md mx-auto border-t px-6 py-4`}>
+        <div className="flex justify-around items-center">
+          <button
+            onClick={() => setActiveTab("home")}
+            className={`flex flex-col items-center gap-1 transition-colors ${
+              activeTab === "home" ? "text-blue-600" : "text-gray-400"
+            }`}
+          >
+            <Home size={24} />
+            <span className="text-xs font-medium">Accueil</span>
+          </button>
 
-            <label className="block mb-4">
-              <input
-                type="checkbox"
-                checked={soundEnabled}
-                onChange={(e) => setSoundEnabled(e.target.checked)}
-              />{" "}
-              Sons activés
-            </label>
+          <button
+            onClick={() => setActiveTab("stats")}
+            className={`flex flex-col items-center gap-1 transition-colors ${
+              activeTab === "stats" ? "text-blue-600" : "text-gray-400"
+            }`}
+          >
+            <TrendingUp size={24} />
+            <span className="text-xs font-medium">Stats</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
-            <label className="block mb-4">
-              <input
-                type="checkbox"
-                checked={darkMode}
-                onChange={(e) => setDarkMode(e.target.checked)}
-              />{" "}
-              Mode sombre
-            </label>
+/**
+ * =========================
+ * Small UI helpers
+ * =========================
+ */
+function RowStat({ icon, label, value, darkMode }) {
+  return (
+    <div className="flex items-center justify-between">
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
+          {icon}
+        </div>
+        <span className={darkMode ? "text-gray-200" : "text-gray-700"}>{label}</span>
+      </div>
+      <span className={`font-semibold ${darkMode ? "text-gray-100" : "text-gray-800"}`}>{value}</span>
+    </div>
+  );
+}
 
-            <button
-              onClick={() => setShowSettings(false)}
-              className="w-full bg-blue-600 text-white py-2 rounded"
-            >
-              Fermer
-            </button>
+function NotifCard({ icon, title, subtitle, text, color, onClose, onDone }) {
+  const border =
+    color === "purple" ? "border-purple-500" : color === "green" ? "border-green-500" : "border-gray-300";
+  const btn =
+    color === "purple" ? "bg-purple-500 hover:bg-purple-600" : color === "green" ? "bg-green-500 hover:bg-green-600" : "bg-gray-600 hover:bg-gray-700";
+
+  return (
+    <div className={`absolute top-4 left-4 right-4 z-50 bg-white rounded-2xl shadow-2xl p-5 border-l-4 ${border}`}>
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
+            {icon}
+          </div>
+          <div>
+            <h3 className="font-semibold text-gray-800">{title}</h3>
+            <p className="text-sm text-gray-600">{subtitle}</p>
           </div>
         </div>
-      )}
+        <button onClick={onClose}>
+          <X size={20} className="text-gray-400" />
+        </button>
+      </div>
+
+      <p className="text-sm text-gray-600 mb-3">{text}</p>
+
+      <button
+        onClick={onDone}
+        className={`w-full ${btn} text-white py-2 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2`}
+      >
+        <Check size={18} />
+        C'est fait !
+      </button>
     </div>
   );
 }
