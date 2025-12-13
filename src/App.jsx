@@ -1,4 +1,5 @@
-import Zenhydratation from "./Zenhydratation.jsx";
+import ZenhydratationApp from "./ZenhydratationApp.jsx";
+
 export default function App() {
-  return <Zenhydratation />;
+  return <ZenhydratationApp />;
 }
