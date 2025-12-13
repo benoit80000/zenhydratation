@@ -26,10 +26,11 @@ import {
 
 /**
  * ==========================================================
- * ZenhydratationApp.jsx (3 thèmes + suppression bouton settings en haut)
- * - Thèmes: "neo" (Neo Glass), "classic" (ancien style clair), "wellness" (soft wellness)
- * - Les réglages se font UNIQUEMENT via l’onglet Réglages (bottom nav).
- * - Offline (localStorage), Vercel OK (pas d'import Capacitor).
+ * ZenhydratationApp.jsx (Vercel-safe)
+ * - 3 thèmes : neo (Neo Glass), classic, wellness
+ * - Réglages via onglet Réglages (bottom nav), pas de bouton settings en haut
+ * - Offline: localStorage
+ * - Hydratation: verres vides qui se remplissent avec animation (wave)
  * ==========================================================
  */
 
@@ -160,8 +161,7 @@ const THEMES = {
     cardSoft: "border border-white/10 bg-white/[0.06] shadow-[0_18px_45px_rgba(0,0,0,0.30)] backdrop-blur-2xl",
     nav: "border border-white/10 bg-white/[0.07] shadow-[0_18px_50px_rgba(0,0,0,0.35)] backdrop-blur-2xl",
     modalBackdrop: "bg-black/55",
-    surfaceInput:
-      "bg-black/30 border border-white/10 text-white/85",
+    surfaceInput: "bg-black/30 border border-white/10 text-white/85",
     tooltip: {
       background: "rgba(10, 12, 18, 0.92)",
       border: "1px solid rgba(255,255,255,0.10)",
@@ -189,8 +189,7 @@ const THEMES = {
     cardSoft: "border border-gray-200 bg-white shadow-[0_8px_24px_rgba(0,0,0,0.06)]",
     nav: "border border-gray-200 bg-white shadow-[0_12px_30px_rgba(0,0,0,0.10)]",
     modalBackdrop: "bg-black/40",
-    surfaceInput:
-      "bg-white border border-gray-200 text-gray-900",
+    surfaceInput: "bg-white border border-gray-200 text-gray-900",
     tooltip: {
       background: "rgba(255,255,255,0.98)",
       border: "1px solid rgba(0,0,0,0.08)",
@@ -222,8 +221,7 @@ const THEMES = {
     nav:
       "border border-white/70 bg-white/70 shadow-[0_16px_40px_rgba(15,23,42,0.12)] backdrop-blur-xl",
     modalBackdrop: "bg-black/35",
-    surfaceInput:
-      "bg-white/90 border border-white/80 text-slate-900",
+    surfaceInput: "bg-white/90 border border-white/80 text-slate-900",
     tooltip: {
       background: "rgba(255,255,255,0.98)",
       border: "1px solid rgba(15,23,42,0.10)",
@@ -240,8 +238,8 @@ function ProgressRing({ pct, size = 56, stroke = 7, glowClass = "text-cyan-300",
   const c = 2 * Math.PI * r;
   const clamped = Math.max(0, Math.min(100, pct));
   const offset = c - (clamped / 100) * c;
-
   const isGlass = theme?.id === "neo";
+
   return (
     <div className="relative" style={{ width: size, height: size }}>
       <svg width={size} height={size} className="rotate-[-90deg]">
@@ -315,7 +313,7 @@ function SurfaceButton({ children, onClick, className, title, theme, type = "but
 }
 
 /* =========================
- * App
+ * Component
  * ========================= */
 export default function ZenhydratationApp() {
   const [activeTab, setActiveTab] = useState("home");
@@ -691,7 +689,7 @@ export default function ZenhydratationApp() {
     });
   };
 
-  const creditCompletion = (type, exIdOrNull) => {
+  const creditCompletion = (type, _exIdOrNull) => {
     const totalKeyMap = {
       eye: "eyeBreaks",
       stretch: "stretches",
@@ -701,20 +699,7 @@ export default function ZenhydratationApp() {
 
     setTodayStats((s) => {
       const totalKey = totalKeyMap[type];
-      const details = s.details ?? { eye: {}, stretch: {}, wake: {}, sleep: {} };
-      const nextDetails = { ...details };
-
-      if (exIdOrNull) {
-        const bucket = { ...(details[type] ?? {}) };
-        bucket[exIdOrNull] = (bucket[exIdOrNull] ?? 0) + 1;
-        nextDetails[type] = bucket;
-      }
-
-      return {
-        ...s,
-        [totalKey]: (s[totalKey] ?? 0) + 1,
-        details: nextDetails
-      };
+      return { ...s, [totalKey]: (s[totalKey] ?? 0) + 1 };
     });
 
     if (soundEnabled) playTone({ freq: type === "sleep" ? 520 : 740, durationMs: 220 });
@@ -744,7 +729,6 @@ export default function ZenhydratationApp() {
             return { ...r, index: nextIndex, remainingSec: r.queue[nextIndex].durationSec };
           }
 
-          // finished => credit total once
           creditCompletion(r.type, null);
           return null;
         }
@@ -765,7 +749,7 @@ export default function ZenhydratationApp() {
 
     return (
       <div className="px-5 pb-24 pt-6">
-        {/* Header: plus de bouton Settings en haut (conformément à votre demande) */}
+        {/* Header: pas de bouton settings en haut */}
         <div className="flex items-start justify-between">
           <div>
             <div className={cn("text-[34px] font-semibold tracking-tight leading-tight", theme.textPrimary)}>
@@ -790,11 +774,19 @@ export default function ZenhydratationApp() {
 
           <button
             onClick={() => setIsPaused((p) => !p)}
-            className={cn("h-11 w-11 rounded-2xl flex items-center justify-center transition", theme.cardSoft, theme.id === "neo" ? "hover:bg-white/[0.10]" : "hover:bg-black/[0.03]")}
+            className={cn(
+              "h-11 w-11 rounded-2xl flex items-center justify-center transition",
+              theme.cardSoft,
+              theme.id === "neo" ? "hover:bg-white/[0.10]" : "hover:bg-black/[0.03]"
+            )}
             title={isPaused ? "Reprendre" : "Pause"}
             aria-label={isPaused ? "Reprendre" : "Pause"}
           >
-            {isPaused ? <Play className={cn("h-5 w-5", theme.id === "neo" ? "text-white/85" : "text-gray-700")} /> : <Pause className={cn("h-5 w-5", theme.id === "neo" ? "text-white/85" : "text-gray-700")} />}
+            {isPaused ? (
+              <Play className={cn("h-5 w-5", theme.id === "neo" ? "text-white/85" : "text-gray-700")} />
+            ) : (
+              <Pause className={cn("h-5 w-5", theme.id === "neo" ? "text-white/85" : "text-gray-700")} />
+            )}
           </button>
         </div>
 
@@ -837,7 +829,7 @@ export default function ZenhydratationApp() {
           </div>
         </div>
 
-        {/* Hydration */}
+        {/* Hydratation (verres animés) */}
         <div className={cn("mt-6 rounded-[28px] p-6", theme.card)}>
           <div className="flex items-end justify-between">
             <div className={cn("text-[28px] font-semibold leading-none", theme.textPrimary)}>
@@ -849,24 +841,29 @@ export default function ZenhydratationApp() {
           </div>
 
           <div className="mt-5">
-            <div className={cn("h-3 w-full rounded-full overflow-hidden", theme.id === "neo" ? "bg-white/10 border border-white/10" : "bg-gray-100 border border-gray-200")}>
-              <div
-                className={cn(
-                  "h-full rounded-full",
-                  theme.id === "neo"
-                    ? "bg-gradient-to-r from-cyan-400/70 to-blue-400/70"
-                    : "bg-gradient-to-r from-blue-500/70 to-cyan-500/70"
-                )}
-                style={{ width: `${Math.max(0, Math.min(100, hydrationPct))}%` }}
-              />
-            </div>
+            <WaterGlasses
+              count={waterCount}
+              goal={waterGoal}
+              onAdd={addWater}
+              theme={theme}
+              size="md"
+            />
 
             <button
               onClick={addWater}
-              className={cn("mt-5 w-full text-left text-[22px] font-medium transition", theme.textSecondary, theme.id === "neo" ? "hover:text-white/85" : "hover:text-gray-900")}
+              className={cn(
+                "mt-5 w-full rounded-2xl px-4 py-3 font-semibold text-[14px] transition",
+                theme.id === "neo"
+                  ? "border border-white/10 bg-gradient-to-b from-white/[0.12] to-white/[0.06] hover:from-white/[0.16] hover:to-white/[0.08]"
+                  : "border border-black/10 bg-black/[0.03] hover:bg-black/[0.05]"
+              )}
             >
-              Ajouter un verre
+              <span className={theme.textPrimary}>+ Ajouter un verre</span>
             </button>
+
+            <div className={cn("mt-3 text-[12px]", theme.textMuted)}>
+              Astuce : vous pouvez cliquer directement sur un verre vide pour l’ajouter.
+            </div>
           </div>
         </div>
 
@@ -880,7 +877,11 @@ export default function ZenhydratationApp() {
               subtitle={formatTime(eyeBreakTimer)}
               glow="violet"
               theme={theme}
-              icon={theme.id === "neo" ? <Eye className="h-6 w-6 text-white/85" /> : <Eye className="h-6 w-6 text-violet-600" />}
+              icon={
+                theme.id === "neo"
+                  ? <Eye className="h-6 w-6 text-white/85" />
+                  : <Eye className="h-6 w-6 text-violet-600" />
+              }
               onClick={() => setShowExercise("eye")}
             />
 
@@ -889,7 +890,11 @@ export default function ZenhydratationApp() {
               subtitle={formatTime(stretchTimer)}
               glow="emerald"
               theme={theme}
-              icon={theme.id === "neo" ? <Activity className="h-6 w-6 text-white/85" /> : <Activity className="h-6 w-6 text-emerald-600" />}
+              icon={
+                theme.id === "neo"
+                  ? <Activity className="h-6 w-6 text-white/85" />
+                  : <Activity className="h-6 w-6 text-emerald-600" />
+              }
               onClick={() => setShowExercise("stretch")}
             />
 
@@ -898,7 +903,11 @@ export default function ZenhydratationApp() {
               subtitle={`${exercises.wake.length} étapes`}
               glow="amber"
               theme={theme}
-              icon={theme.id === "neo" ? <Sun className="h-6 w-6 text-white/85" /> : <Sun className="h-6 w-6 text-amber-600" />}
+              icon={
+                theme.id === "neo"
+                  ? <Sun className="h-6 w-6 text-white/85" />
+                  : <Sun className="h-6 w-6 text-amber-600" />
+              }
               onClick={() => startQueue("wake", exercises.wake)}
             />
 
@@ -907,7 +916,11 @@ export default function ZenhydratationApp() {
               subtitle={`${exercises.sleep.length} étapes`}
               glow="indigo"
               theme={theme}
-              icon={theme.id === "neo" ? <Moon className="h-6 w-6 text-white/85" /> : <Moon className="h-6 w-6 text-indigo-600" />}
+              icon={
+                theme.id === "neo"
+                  ? <Moon className="h-6 w-6 text-white/85" />
+                  : <Moon className="h-6 w-6 text-indigo-600" />
+              }
               onClick={() => startQueue("sleep", exercises.sleep)}
             />
           </div>
@@ -987,10 +1000,26 @@ export default function ZenhydratationApp() {
             ) : (
               <ResponsiveContainer>
                 <BarChart data={chart7}>
-                  <XAxis dataKey="day" tick={{ fill: theme.id === "neo" ? "rgba(255,255,255,0.65)" : "rgba(15,23,42,0.60)", fontSize: 12 }} />
-                  <YAxis allowDecimals={false} tick={{ fill: theme.id === "neo" ? "rgba(255,255,255,0.65)" : "rgba(15,23,42,0.60)", fontSize: 12 }} />
+                  <XAxis
+                    dataKey="day"
+                    tick={{
+                      fill: theme.id === "neo" ? "rgba(255,255,255,0.65)" : "rgba(15,23,42,0.60)",
+                      fontSize: 12
+                    }}
+                  />
+                  <YAxis
+                    allowDecimals={false}
+                    tick={{
+                      fill: theme.id === "neo" ? "rgba(255,255,255,0.65)" : "rgba(15,23,42,0.60)",
+                      fontSize: 12
+                    }}
+                  />
                   <Tooltip contentStyle={tooltipStyle} />
-                  <Legend wrapperStyle={{ color: theme.id === "neo" ? "rgba(255,255,255,0.7)" : "rgba(15,23,42,0.65)" }} />
+                  <Legend
+                    wrapperStyle={{
+                      color: theme.id === "neo" ? "rgba(255,255,255,0.7)" : "rgba(15,23,42,0.65)"
+                    }}
+                  />
                   <Bar dataKey="water" name="Eau" fill="rgba(34, 211, 238, 0.60)" />
                   <Bar dataKey="eye" name="Yeux" fill="rgba(167, 139, 250, 0.60)" />
                   <Bar dataKey="stretch" name="Étirements" fill="rgba(52, 211, 153, 0.60)" />
@@ -1016,10 +1045,26 @@ export default function ZenhydratationApp() {
             ) : (
               <ResponsiveContainer>
                 <BarChart data={chart30}>
-                  <XAxis dataKey="day" tick={{ fill: theme.id === "neo" ? "rgba(255,255,255,0.65)" : "rgba(15,23,42,0.60)", fontSize: 12 }} />
-                  <YAxis allowDecimals={false} tick={{ fill: theme.id === "neo" ? "rgba(255,255,255,0.65)" : "rgba(15,23,42,0.60)", fontSize: 12 }} />
+                  <XAxis
+                    dataKey="day"
+                    tick={{
+                      fill: theme.id === "neo" ? "rgba(255,255,255,0.65)" : "rgba(15,23,42,0.60)",
+                      fontSize: 12
+                    }}
+                  />
+                  <YAxis
+                    allowDecimals={false}
+                    tick={{
+                      fill: theme.id === "neo" ? "rgba(255,255,255,0.65)" : "rgba(15,23,42,0.60)",
+                      fontSize: 12
+                    }}
+                  />
                   <Tooltip contentStyle={tooltipStyle} />
-                  <Legend wrapperStyle={{ color: theme.id === "neo" ? "rgba(255,255,255,0.7)" : "rgba(15,23,42,0.65)" }} />
+                  <Legend
+                    wrapperStyle={{
+                      color: theme.id === "neo" ? "rgba(255,255,255,0.7)" : "rgba(15,23,42,0.65)"
+                    }}
+                  />
                   <Bar dataKey="water" name="Eau" fill="rgba(34, 211, 238, 0.55)" />
                   <Bar dataKey="eye" name="Yeux" fill="rgba(167, 139, 250, 0.55)" />
                   <Bar dataKey="stretch" name="Étirements" fill="rgba(52, 211, 153, 0.55)" />
@@ -1066,7 +1111,11 @@ export default function ZenhydratationApp() {
               <div className={cn("text-[18px] font-semibold", theme.textPrimary)}>{title}</div>
               <button
                 onClick={() => setShowExercise(null)}
-                className={cn("h-10 w-10 rounded-2xl flex items-center justify-center transition", theme.cardSoft, theme.id === "neo" ? "hover:bg-white/[0.10]" : "hover:bg-black/[0.03]")}
+                className={cn(
+                  "h-10 w-10 rounded-2xl flex items-center justify-center transition",
+                  theme.cardSoft,
+                  theme.id === "neo" ? "hover:bg-white/[0.10]" : "hover:bg-black/[0.03]"
+                )}
               >
                 <X className={cn("h-5 w-5", theme.id === "neo" ? "text-white/75" : "text-gray-600")} />
               </button>
@@ -1112,7 +1161,10 @@ export default function ZenhydratationApp() {
                       <div className={cn("text-[15px] font-semibold truncate", theme.textPrimary)}>{ex.name}</div>
                       <div className={cn("mt-1 text-[13px] leading-snug", theme.textMuted)}>{ex.desc}</div>
                     </div>
-                    <div className={cn("shrink-0 rounded-full px-3 py-1 text-[12px] font-semibold", theme.id === "neo" ? "bg-white/10 border border-white/10" : "bg-black/[0.03] border border-black/10")}>
+                    <div className={cn(
+                      "shrink-0 rounded-full px-3 py-1 text-[12px] font-semibold",
+                      theme.id === "neo" ? "bg-white/10 border border-white/10" : "bg-black/[0.03] border border-black/10"
+                    )}>
                       <span className={theme.textSecondary}>{ex.durationSec}s</span>
                     </div>
                   </div>
@@ -1160,7 +1212,11 @@ export default function ZenhydratationApp() {
               </div>
               <button
                 onClick={stopRoutine}
-                className={cn("h-10 w-10 rounded-2xl flex items-center justify-center transition", theme.cardSoft, theme.id === "neo" ? "hover:bg-white/[0.10]" : "hover:bg-black/[0.03]")}
+                className={cn(
+                  "h-10 w-10 rounded-2xl flex items-center justify-center transition",
+                  theme.cardSoft,
+                  theme.id === "neo" ? "hover:bg-white/[0.10]" : "hover:bg-black/[0.03]"
+                )}
                 aria-label="Fermer"
               >
                 <X className={cn("h-5 w-5", theme.id === "neo" ? "text-white/75" : "text-gray-600")} />
@@ -1193,7 +1249,11 @@ export default function ZenhydratationApp() {
             <div className="mt-6 grid grid-cols-3 gap-3">
               <SurfaceButton onClick={toggleRoutinePause} theme={theme} className="text-center" title={activeRoutine.paused ? "Reprendre" : "Pause"}>
                 <div className="flex items-center justify-center gap-2">
-                  {activeRoutine.paused ? <Play className={cn("h-4 w-4", theme.id === "neo" ? "text-white/85" : "text-gray-700")} /> : <Pause className={cn("h-4 w-4", theme.id === "neo" ? "text-white/85" : "text-gray-700")} />}
+                  {activeRoutine.paused ? (
+                    <Play className={cn("h-4 w-4", theme.id === "neo" ? "text-white/85" : "text-gray-700")} />
+                  ) : (
+                    <Pause className={cn("h-4 w-4", theme.id === "neo" ? "text-white/85" : "text-gray-700")} />
+                  )}
                   <span className={cn("text-[13px] font-semibold", theme.textPrimary)}>
                     {activeRoutine.paused ? "Reprendre" : "Pause"}
                   </span>
@@ -1206,7 +1266,7 @@ export default function ZenhydratationApp() {
 
               <SurfaceButton
                 onClick={() => {
-                  // credit finish
+                  // Terminer manuellement => incrément total (pas de détail par exercice)
                   creditCompletion(activeRoutine.type, null);
                   setActiveRoutine(null);
                 }}
@@ -1252,7 +1312,11 @@ export default function ZenhydratationApp() {
             </div>
             <button
               onClick={() => setShowNotif(null)}
-              className={cn("h-10 w-10 rounded-2xl flex items-center justify-center transition", theme.cardSoft, theme.id === "neo" ? "hover:bg-white/[0.10]" : "hover:bg-black/[0.03]")}
+              className={cn(
+                "h-10 w-10 rounded-2xl flex items-center justify-center transition",
+                theme.cardSoft,
+                theme.id === "neo" ? "hover:bg-white/[0.10]" : "hover:bg-black/[0.03]"
+              )}
             >
               <X className={cn("h-5 w-5", theme.id === "neo" ? "text-white/75" : "text-gray-600")} />
             </button>
@@ -1332,7 +1396,11 @@ export default function ZenhydratationApp() {
                   <div className={cn("text-[18px] font-semibold", theme.textPrimary)}>Paramètres</div>
                   <button
                     onClick={() => setShowSettings(false)}
-                    className={cn("h-10 w-10 rounded-2xl flex items-center justify-center transition", theme.cardSoft, theme.id === "neo" ? "hover:bg-white/[0.10]" : "hover:bg-black/[0.03]")}
+                    className={cn(
+                      "h-10 w-10 rounded-2xl flex items-center justify-center transition",
+                      theme.cardSoft,
+                      theme.id === "neo" ? "hover:bg-white/[0.10]" : "hover:bg-black/[0.03]"
+                    )}
                   >
                     <X className={cn("h-5 w-5", theme.id === "neo" ? "text-white/75" : "text-gray-600")} />
                   </button>
@@ -1453,6 +1521,15 @@ export default function ZenhydratationApp() {
           </div>
         )}
       </div>
+
+      {/* Global keyframes for WaterGlasses wave */}
+      <style>{`
+        @keyframes zh_wave {
+          0%   { transform: translateX(0) translateY(0); }
+          50%  { transform: translateX(10%) translateY(6%); }
+          100% { transform: translateX(0) translateY(0); }
+        }
+      `}</style>
     </div>
   );
 }
@@ -1493,5 +1570,121 @@ function ShortcutTile({ title, subtitle, icon, glow = "cyan", theme, onClick }) 
         </div>
       </div>
     </button>
+  );
+}
+
+/* =========================
+ * Water glasses (animated fill)
+ * ========================= */
+function WaterGlasses({ count, goal, onAdd, theme, size = "md" }) {
+  const dims =
+    size === "sm"
+      ? { h: 58, gap: 10 }
+      : size === "lg"
+        ? { h: 78, gap: 12 }
+        : { h: 68, gap: 12 };
+
+  const fillColor =
+    theme.id === "neo"
+      ? "from-cyan-300/80 to-blue-400/80"
+      : theme.id === "wellness"
+        ? "from-sky-400/70 to-emerald-400/70"
+        : "from-blue-500/70 to-cyan-500/70";
+
+  const glassBg =
+    theme.id === "neo"
+      ? "bg-white/[0.06] border-white/10"
+      : theme.id === "wellness"
+        ? "bg-white/70 border-white/70"
+        : "bg-white border-gray-200";
+
+  const rim =
+    theme.id === "neo"
+      ? "bg-white/10"
+      : theme.id === "wellness"
+        ? "bg-white/70"
+        : "bg-gray-100";
+
+  return (
+    <div className="w-full">
+      <div
+        className="grid"
+        style={{
+          gridTemplateColumns: `repeat(${goal}, minmax(0, 1fr))`,
+          gap: dims.gap
+        }}
+      >
+        {Array.from({ length: goal }).map((_, i) => {
+          const filled = i < count;
+          return (
+            <button
+              key={i}
+              type="button"
+              onClick={() => {
+                if (!filled) onAdd?.();
+              }}
+              className="relative group"
+              style={{ height: dims.h }}
+              aria-label={filled ? `Verre ${i + 1} rempli` : `Remplir verre ${i + 1}`}
+              title={filled ? "Déjà rempli" : "Ajouter un verre"}
+            >
+              <div className={cn("relative w-full h-full rounded-2xl border overflow-hidden", glassBg)}>
+                {/* highlight */}
+                <div className="absolute inset-0 pointer-events-none">
+                  <div className="absolute left-1 top-2 bottom-2 w-[22%] rounded-full bg-white/10" />
+                </div>
+
+                {/* rim */}
+                <div className={cn("absolute top-0 left-0 right-0 h-[10%] opacity-60", rim)} />
+
+                {/* water fill */}
+                <div
+                  className={cn(
+                    "absolute left-0 right-0 bottom-0 transition-[height] duration-700 ease-out",
+                    filled ? "h-[78%]" : "h-0"
+                  )}
+                >
+                  <div className={cn("absolute inset-0 bg-gradient-to-b", fillColor)} />
+
+                  {/* wave overlay */}
+                  <div className="absolute inset-0 overflow-hidden">
+                    <div
+                      className={cn(
+                        "absolute -left-[40%] top-[-10%] w-[180%] h-[60%] rounded-[100%] opacity-35",
+                        theme.id === "neo" ? "bg-white/20" : "bg-white/35"
+                      )}
+                      style={{ animation: "zh_wave 2.6s ease-in-out infinite" }}
+                    />
+                    <div
+                      className={cn(
+                        "absolute -left-[30%] top-[2%] w-[160%] h-[55%] rounded-[100%] opacity-25",
+                        theme.id === "neo" ? "bg-white/15" : "bg-white/30"
+                      )}
+                      style={{ animation: "zh_wave 3.2s ease-in-out infinite reverse" }}
+                    />
+                  </div>
+                </div>
+
+                {/* empty hover hint */}
+                {!filled && (
+                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <span
+                      className={cn(
+                        "text-[11px] font-semibold px-2 py-1 rounded-full",
+                        theme.id === "neo"
+                          ? "bg-white/10 border border-white/10 text-white/80"
+                          : "bg-black/5 border border-black/10 text-gray-700"
+                      )}
+                    >
+                      +1
+                    </span>
+                  </div>
+                )}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
