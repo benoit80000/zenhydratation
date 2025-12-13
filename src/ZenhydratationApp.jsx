@@ -34,6 +34,7 @@ import {
  * - Appui long sur un verre = annuler (retirer une dose)
  * - Bulles optionnelles
  * - Avatar homme/femme + énergie (fatigue) qui s’améliore avec hydratation + routines
+ * - Home: Tuiles uniformes (ordre: Énergie, Hydratation, Yeux, Étirements, Réveil, Coucher)
  * ==========================================================
  */
 
@@ -510,7 +511,6 @@ export default function ZenhydratationApp() {
         }
       });
 
-      // waterMl is source of truth; fall back on saved waterMl, else todayStats.waterMl
       if (typeof s.waterMl === "number") setWaterMl(clampInt(s.waterMl, 0, 50_000));
       else setWaterMl(clampInt(s.todayStats?.waterMl ?? 0, 0, 50_000));
 
@@ -544,14 +544,11 @@ export default function ZenhydratationApp() {
       eyeBreakInterval,
       stretchInterval,
       soundEnabled,
-      // hydration
       cupMl,
       dailyGoalMl,
       waterMl,
-      // avatar / visual
       avatar,
       bubblesEnabled,
-      // timers / session
       eyeBreakTimer,
       stretchTimer,
       isPaused,
@@ -739,7 +736,6 @@ export default function ZenhydratationApp() {
 
   const chart7 = window7.map((d) => ({
     day: d.dayKey.slice(5),
-    // convert ml -> "doses" for graph readability
     water: Math.round((d.waterMl ?? 0) / Math.max(1, cupMl)),
     eye: d.eyeBreaks ?? 0,
     stretch: d.stretches ?? 0,
@@ -840,7 +836,6 @@ export default function ZenhydratationApp() {
         if (r.remainingSec <= 1) {
           const step = r.queue[r.index];
 
-          // details per step
           setTodayStats((s) => {
             const details = s.details ?? { eye: {}, stretch: {}, wake: {}, sleep: {} };
             const bucket = { ...(details[r.type] ?? {}) };
@@ -939,81 +934,78 @@ export default function ZenhydratationApp() {
           </div>
         </div>
 
-        {/* Energy / Avatar */}
-        <div className={cn("mt-6 rounded-[28px] p-6", theme.card)}>
-          <div className="flex items-center gap-4">
-            <AvatarMood theme={theme} avatar={avatar} energyScore={energyScore} />
-            <div className="flex-1">
-              <div className={cn("text-[16px] font-semibold", theme.textPrimary)}>Énergie</div>
-              <div className={cn("mt-1 text-[13px]", theme.textMuted)}>
-                {energyScore < 35 ? "Fatigue élevée" : energyScore < 70 ? "En amélioration" : "Bonne forme"}
+        {/* Tuiles uniformes (ordre demandé) */}
+        <div className="mt-6">
+          <div className="grid grid-cols-2 gap-4">
+            {/* 1) Énergie */}
+            <div className={cn("w-full h-full min-h-[180px] rounded-[24px] p-4 flex flex-col justify-between", theme.card)}>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className={cn("text-[16px] font-semibold", theme.textPrimary)}>Énergie</div>
+                  <div className={cn("mt-1 text-[12px] font-semibold", theme.textMuted)}>
+                    {energyScore < 35 ? "Fatigué" : energyScore < 70 ? "En amélioration" : "En forme"}
+                  </div>
+                </div>
+                <div className="shrink-0">
+                  <AvatarMood theme={theme} avatar={avatar} energyScore={energyScore} />
+                </div>
               </div>
 
-              <div className={cn("mt-3 h-3 rounded-full overflow-hidden", theme.id === "neo" ? "bg-white/10" : "bg-black/10")}>
-                <div
-                  className={cn(
-                    "h-full rounded-full transition-[width] duration-700 ease-out",
-                    theme.id === "neo"
-                      ? "bg-gradient-to-r from-rose-300/70 via-amber-300/70 to-emerald-300/70"
-                      : "bg-gradient-to-r from-rose-400/70 via-amber-400/70 to-emerald-400/70"
-                  )}
-                  style={{ width: `${energyScore}%` }}
+              <div className="mt-3">
+                <div className={cn("h-3 rounded-full overflow-hidden", theme.id === "neo" ? "bg-white/10" : "bg-black/10")}>
+                  <div
+                    className={cn(
+                      "h-full rounded-full transition-[width] duration-700 ease-out",
+                      theme.id === "neo"
+                        ? "bg-gradient-to-r from-rose-300/70 via-amber-300/70 to-emerald-300/70"
+                        : "bg-gradient-to-r from-rose-400/70 via-amber-400/70 to-emerald-400/70"
+                    )}
+                    style={{ width: `${energyScore}%` }}
+                  />
+                </div>
+                <div className={cn("mt-2 text-[12px]", theme.textMuted)}>
+                  Score: <span className={cn("font-semibold", theme.textSecondary)}>{energyScore}%</span>
+                </div>
+              </div>
+            </div>
+
+            {/* 2) Hydratation */}
+            <div className={cn("w-full h-full min-h-[180px] rounded-[24px] p-4 flex flex-col justify-between", theme.card)}>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className={cn("text-[16px] font-semibold", theme.textPrimary)}>Hydratation</div>
+                  <div className={cn("mt-1 text-[12px] font-semibold", theme.textMuted)}>
+                    {waterMl} / {dailyGoalMl} ml • {Math.max(0, Math.min(100, hydrationPct))}%
+                  </div>
+                  <div className={cn("mt-1 text-[12px]", theme.textMuted)}>
+                    Dose: {cupMl}ml • {waterCount} dose{waterCount > 1 ? "s" : ""}
+                  </div>
+                </div>
+
+                <div className="shrink-0">
+                  <GlassIconPlate glow="cyan" theme={theme}>
+                    {theme.id === "neo"
+                      ? <Droplets className="h-6 w-6 text-white/85" />
+                      : <Droplets className="h-6 w-6 text-cyan-600" />}
+                  </GlassIconPlate>
+                </div>
+              </div>
+
+              <div className="mt-3">
+                <WaterGlasses
+                  totalMl={waterMl}
+                  goalMl={dailyGoalMl}
+                  cupMl={cupMl}
+                  onAdd={addWater}
+                  onRemove={removeWater}
+                  bubblesEnabled={bubblesEnabled}
+                  theme={theme}
+                  size="sm"
                 />
               </div>
-
-              <div className={cn("mt-2 text-[12px]", theme.textMuted)}>
-                Hydratation + routines = récupération progressive.
-              </div>
             </div>
-          </div>
-        </div>
 
-        {/* Hydratation (ml + verres progressifs) */}
-        <div className={cn("mt-6 rounded-[28px] p-6", theme.card)}>
-          <div className="flex items-end justify-between">
-            <div className={cn("text-[28px] font-semibold leading-none", theme.textPrimary)}>
-              Hydratation
-            </div>
-            <div className={cn("text-[16px] font-semibold", theme.textSecondary)}>
-              {waterMl} / {dailyGoalMl} ml
-            </div>
-          </div>
-
-          <div className={cn("mt-2 text-[12px]", theme.textMuted)}>
-            Dose: {cupMl}ml • {waterCount} dose{waterCount > 1 ? "s" : ""} • {Math.max(0, Math.min(100, hydrationPct))}% objectif
-          </div>
-
-          <div className="mt-5">
-            <WaterGlasses
-              totalMl={waterMl}
-              goalMl={dailyGoalMl}
-              cupMl={cupMl}
-              onAdd={addWater}
-              onRemove={removeWater}
-              bubblesEnabled={bubblesEnabled}
-              theme={theme}
-              size="md"
-            />
-
-            <button
-              onClick={addWater}
-              className={cn(
-                "mt-5 w-full rounded-2xl px-4 py-3 font-semibold text-[14px] transition",
-                theme.id === "neo"
-                  ? "border border-white/10 bg-gradient-to-b from-white/[0.12] to-white/[0.06] hover:from-white/[0.16] hover:to-white/[0.08]"
-                  : "border border-black/10 bg-black/[0.03] hover:bg-black/[0.05]"
-              )}
-            >
-              <span className={theme.textPrimary}>+ Ajouter une dose</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Shortcuts */}
-        <div className="mt-7">
-          <div className={cn("text-[28px] font-semibold", theme.textPrimary)}>Raccourcis</div>
-
-          <div className="mt-5 grid grid-cols-2 gap-4">
+            {/* 3) Yeux */}
             <ShortcutTile
               title="Yeux"
               subtitle={formatTime(eyeBreakTimer)}
@@ -1027,6 +1019,7 @@ export default function ZenhydratationApp() {
               onClick={() => setShowExercise("eye")}
             />
 
+            {/* 4) Étirements */}
             <ShortcutTile
               title="Étirements"
               subtitle={formatTime(stretchTimer)}
@@ -1040,6 +1033,7 @@ export default function ZenhydratationApp() {
               onClick={() => setShowExercise("stretch")}
             />
 
+            {/* 5) Réveil */}
             <ShortcutTile
               title="Réveil"
               subtitle={`${exercises.wake.length} étapes`}
@@ -1053,6 +1047,7 @@ export default function ZenhydratationApp() {
               onClick={() => startQueue("wake", exercises.wake)}
             />
 
+            {/* 6) Coucher */}
             <ShortcutTile
               title="Coucher"
               subtitle={`${exercises.sleep.length} étapes`}
@@ -1303,10 +1298,12 @@ export default function ZenhydratationApp() {
                       <div className={cn("text-[15px] font-semibold truncate", theme.textPrimary)}>{ex.name}</div>
                       <div className={cn("mt-1 text-[13px] leading-snug", theme.textMuted)}>{ex.desc}</div>
                     </div>
-                    <div className={cn(
-                      "shrink-0 rounded-full px-3 py-1 text-[12px] font-semibold",
-                      theme.id === "neo" ? "bg-white/10 border border-white/10" : "bg-black/[0.03] border border-black/10"
-                    )}>
+                    <div
+                      className={cn(
+                        "shrink-0 rounded-full px-3 py-1 text-[12px] font-semibold",
+                        theme.id === "neo" ? "bg-white/10 border border-white/10" : "bg-black/[0.03] border border-black/10"
+                      )}
+                    >
                       <span className={theme.textSecondary}>{ex.durationSec}s</span>
                     </div>
                   </div>
@@ -1679,7 +1676,7 @@ export default function ZenhydratationApp() {
               className={cn(
                 "mt-5 w-full rounded-2xl px-4 py-3 font-semibold text-[14px] transition",
                 theme.id === "neo"
-                  ? "border border-white/10 bg-gradient-to-b from-white/[0.12] to-white/[0.06] hover:from-white/[0.16] hover:to-white/[0.08"
+                  ? "border border-white/10 bg-gradient-to-b from-white/[0.12] to-white/[0.06] hover:from-white/[0.16] hover:to-white/[0.08]"
                   : "border border-black/10 bg-black/[0.03] hover:bg-black/[0.05]"
               )}
             >
@@ -1764,7 +1761,7 @@ export default function ZenhydratationApp() {
 }
 
 /* =========================
- * Shortcut tile
+ * Shortcut tile (uniform size)
  * ========================= */
 function ShortcutTile({ title, subtitle, icon, glow = "cyan", theme, onClick }) {
   const glowMap = {
@@ -1779,7 +1776,7 @@ function ShortcutTile({ title, subtitle, icon, glow = "cyan", theme, onClick }) 
     <button
       onClick={onClick}
       className={cn(
-        "group w-full rounded-[24px] p-4 text-left transition active:scale-[0.99]",
+        "group w-full h-full min-h-[180px] rounded-[24px] p-4 text-left transition active:scale-[0.99] flex flex-col justify-between",
         theme.card,
         theme.id === "neo" ? "hover:bg-white/[0.10]" : "hover:bg-black/[0.03]"
       )}
@@ -1798,20 +1795,20 @@ function ShortcutTile({ title, subtitle, icon, glow = "cyan", theme, onClick }) 
           <div className={cn("mt-1 text-[13px] font-semibold leading-none truncate", theme.textMuted)}>{subtitle}</div>
         </div>
       </div>
+
+      <div className={cn("text-[12px] font-semibold", theme.textMuted)}>
+        Ouvrir
+      </div>
     </button>
   );
 }
 
-/* =========================
- * Avatar mood
- * ========================= */
 /* =========================
  * Avatar mood (emoji homme/femme + état qui évolue)
  * ========================= */
 function AvatarMood({ theme, avatar, energyScore }) {
   const person = avatar === "male" ? "👨" : "👩";
 
-  // 3 paliers (cohérents avec votre UI actuelle <35 / <70 / >=70)
   const mood =
     energyScore < 35
       ? { key: "tired", label: "Fatigué", emoji: "😴", aura: "bg-rose-500/15" }
@@ -1825,10 +1822,7 @@ function AvatarMood({ theme, avatar, energyScore }) {
     <div className="relative">
       <div className={cn("absolute inset-0 rounded-full blur-2xl", mood.aura)} />
       <div
-        className={cn(
-          "h-20 w-20 rounded-[26px] flex flex-col items-center justify-center",
-          theme.cardSoft
-        )}
+        className={cn("h-20 w-20 rounded-[26px] flex flex-col items-center justify-center", theme.cardSoft)}
         aria-label={`Avatar ${genderLabel}, ${mood.label}`}
         title={`${genderLabel} • ${mood.label}`}
       >
@@ -1845,7 +1839,6 @@ function AvatarMood({ theme, avatar, energyScore }) {
   );
 }
 
-
 /* =========================
  * Water glasses (progress fill + long press undo + bubbles)
  * ========================= */
@@ -1861,7 +1854,7 @@ function WaterGlasses({
 }) {
   const dims =
     size === "sm"
-      ? { h: 58, gap: 10 }
+      ? { h: 56, gap: 8 }
       : size === "lg"
         ? { h: 78, gap: 12 }
         : { h: 68, gap: 12 };
@@ -1947,22 +1940,18 @@ function WaterGlasses({
               title="Clic: +dose — Appui long: annuler"
             >
               <div className={cn("relative w-full h-full rounded-2xl border overflow-hidden", glassBg)}>
-                {/* highlight */}
                 <div className="absolute inset-0 pointer-events-none">
                   <div className="absolute left-1 top-2 bottom-2 w-[22%] rounded-full bg-white/10" />
                 </div>
 
-                {/* rim */}
                 <div className={cn("absolute top-0 left-0 right-0 h-[10%] opacity-60", rim)} />
 
-                {/* water fill */}
                 <div
                   className="absolute left-0 right-0 bottom-0 transition-[height] duration-700 ease-out"
                   style={{ height: `${fillPct * 100}%` }}
                 >
                   <div className={cn("absolute inset-0 bg-gradient-to-b", fillColor)} />
 
-                  {/* wave overlays */}
                   <div className="absolute inset-0 overflow-hidden">
                     <div
                       className={cn(
@@ -1980,7 +1969,6 @@ function WaterGlasses({
                     />
                   </div>
 
-                  {/* bubbles */}
                   {bubblesEnabled && (isFull || isPartial) && (
                     <div className="absolute inset-0 pointer-events-none">
                       <Bubble x="22%" delay="0s" />
@@ -1990,7 +1978,6 @@ function WaterGlasses({
                   )}
                 </div>
 
-                {/* hint */}
                 <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                   <span
                     className={cn(
