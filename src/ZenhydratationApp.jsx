@@ -756,7 +756,7 @@ export default function ZenhydratationApp() {
               Zen et hydraté
             </div>
             <div className={cn("mt-1 text-[14px] font-medium", theme.textMuted)}>
-              Pause. Respire. Hydrate.
+              Pause, Respiration et Hydratation pour prendre soin de son corps et de son esprit.
             </div>
 
             <div className="mt-3 flex items-center gap-3">
