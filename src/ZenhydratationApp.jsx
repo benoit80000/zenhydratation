@@ -26,21 +26,18 @@ import {
 
 /**
  * ==========================================================
- * ZenhydratationApp.jsx (Neo Glass)
- * - Web-first (Vercel OK), offline via localStorage
- * - No Capacitor imports (Android later)
- * - 4 modules: Hydratation, Yeux, Étirements, Réveil, Coucher
- * - Click an exercise => full-screen player (ring + timer)
- * - Real stats (no fake), history 7/30 days + streak auto
- * - Sound via WebAudio (works after a first user interaction)
+ * ZenhydratationApp.jsx (3 thèmes + suppression bouton settings en haut)
+ * - Thèmes: "neo" (Neo Glass), "classic" (ancien style clair), "wellness" (soft wellness)
+ * - Les réglages se font UNIQUEMENT via l’onglet Réglages (bottom nav).
+ * - Offline (localStorage), Vercel OK (pas d'import Capacitor).
  * ==========================================================
  */
 
 /* =========================
  * Storage
  * ========================= */
-const STORAGE_STATE_KEY = "zenhydratation_state_v3";
-const STORAGE_HISTORY_KEY = "zenhydratation_history_v3";
+const STORAGE_STATE_KEY = "zenhydratation_state_v4";
+const STORAGE_HISTORY_KEY = "zenhydratation_history_v4";
 
 function safeParse(json, fallback) {
   try {
@@ -132,26 +129,119 @@ function playTone({ freq = 740, durationMs = 180, gain = 0.03 } = {}) {
 }
 
 /* =========================
- * Neo Glass UI helpers
+ * Utils / UI helpers
  * ========================= */
 function cn(...xs) {
   return xs.filter(Boolean).join(" ");
 }
 
-const GLASS =
-  "border border-white/10 bg-white/[0.07] shadow-[0_18px_50px_rgba(0,0,0,0.35)] backdrop-blur-2xl";
-const GLASS_SOFT =
-  "border border-white/10 bg-white/[0.06] shadow-[0_18px_45px_rgba(0,0,0,0.30)] backdrop-blur-2xl";
-const TEXT_PRIMARY = "text-white/90";
-const TEXT_SECONDARY = "text-white/65";
-const TEXT_MUTED = "text-white/50";
+/* =========================
+ * Themes
+ * ========================= */
+const THEMES = {
+  neo: {
+    id: "neo",
+    label: "Neo Glass",
+    bgRoot: "bg-[#070A12]",
+    bgLayer: (
+      <>
+        <div className="fixed inset-0 bg-gradient-to-b from-[#070A12] via-[#0B1022] to-[#1A0B2E]" />
+        <div className="fixed inset-0 pointer-events-none">
+          <div className="absolute -top-24 -left-16 h-72 w-72 rounded-full bg-cyan-500/10 blur-3xl" />
+          <div className="absolute top-48 -right-24 h-80 w-80 rounded-full bg-violet-500/10 blur-3xl" />
+          <div className="absolute bottom-0 left-8 h-72 w-72 rounded-full bg-indigo-500/10 blur-3xl" />
+        </div>
+      </>
+    ),
+    textPrimary: "text-white/90",
+    textSecondary: "text-white/65",
+    textMuted: "text-white/50",
+    card: "border border-white/10 bg-white/[0.07] shadow-[0_18px_50px_rgba(0,0,0,0.35)] backdrop-blur-2xl",
+    cardSoft: "border border-white/10 bg-white/[0.06] shadow-[0_18px_45px_rgba(0,0,0,0.30)] backdrop-blur-2xl",
+    nav: "border border-white/10 bg-white/[0.07] shadow-[0_18px_50px_rgba(0,0,0,0.35)] backdrop-blur-2xl",
+    modalBackdrop: "bg-black/55",
+    surfaceInput:
+      "bg-black/30 border border-white/10 text-white/85",
+    tooltip: {
+      background: "rgba(10, 12, 18, 0.92)",
+      border: "1px solid rgba(255,255,255,0.10)",
+      color: "rgba(255,255,255,0.9)"
+    }
+  },
 
-function ProgressRing({ pct, size = 56, stroke = 7, glowClass = "text-cyan-300" }) {
+  classic: {
+    id: "classic",
+    label: "Classique (clair)",
+    bgRoot: "bg-gray-50",
+    bgLayer: (
+      <>
+        <div className="fixed inset-0 bg-gradient-to-b from-gray-50 via-gray-50 to-gray-100" />
+        <div className="fixed inset-0 pointer-events-none">
+          <div className="absolute -top-28 -left-24 h-80 w-80 rounded-full bg-blue-300/20 blur-3xl" />
+          <div className="absolute top-48 -right-24 h-96 w-96 rounded-full bg-purple-300/20 blur-3xl" />
+        </div>
+      </>
+    ),
+    textPrimary: "text-gray-900",
+    textSecondary: "text-gray-700",
+    textMuted: "text-gray-500",
+    card: "border border-gray-200 bg-white shadow-[0_10px_30px_rgba(0,0,0,0.08)]",
+    cardSoft: "border border-gray-200 bg-white shadow-[0_8px_24px_rgba(0,0,0,0.06)]",
+    nav: "border border-gray-200 bg-white shadow-[0_12px_30px_rgba(0,0,0,0.10)]",
+    modalBackdrop: "bg-black/40",
+    surfaceInput:
+      "bg-white border border-gray-200 text-gray-900",
+    tooltip: {
+      background: "rgba(255,255,255,0.98)",
+      border: "1px solid rgba(0,0,0,0.08)",
+      color: "rgba(17,24,39,0.95)"
+    }
+  },
+
+  wellness: {
+    id: "wellness",
+    label: "Soft Wellness",
+    bgRoot: "bg-[#F7FAFF]",
+    bgLayer: (
+      <>
+        <div className="fixed inset-0 bg-gradient-to-b from-[#F7FAFF] via-[#F7FAFF] to-[#EEF6FF]" />
+        <div className="fixed inset-0 pointer-events-none">
+          <div className="absolute -top-28 -left-28 h-96 w-96 rounded-full bg-sky-300/25 blur-3xl" />
+          <div className="absolute top-40 -right-28 h-[28rem] w-[28rem] rounded-full bg-emerald-300/20 blur-3xl" />
+          <div className="absolute bottom-0 left-8 h-96 w-96 rounded-full bg-amber-300/15 blur-3xl" />
+        </div>
+      </>
+    ),
+    textPrimary: "text-slate-900",
+    textSecondary: "text-slate-700",
+    textMuted: "text-slate-500",
+    card:
+      "border border-white/70 bg-white/70 shadow-[0_14px_40px_rgba(15,23,42,0.10)] backdrop-blur-xl",
+    cardSoft:
+      "border border-white/70 bg-white/60 shadow-[0_12px_34px_rgba(15,23,42,0.08)] backdrop-blur-xl",
+    nav:
+      "border border-white/70 bg-white/70 shadow-[0_16px_40px_rgba(15,23,42,0.12)] backdrop-blur-xl",
+    modalBackdrop: "bg-black/35",
+    surfaceInput:
+      "bg-white/90 border border-white/80 text-slate-900",
+    tooltip: {
+      background: "rgba(255,255,255,0.98)",
+      border: "1px solid rgba(15,23,42,0.10)",
+      color: "rgba(15,23,42,0.92)"
+    }
+  }
+};
+
+/* =========================
+ * Visual helpers
+ * ========================= */
+function ProgressRing({ pct, size = 56, stroke = 7, glowClass = "text-cyan-300", theme }) {
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
   const clamped = Math.max(0, Math.min(100, pct));
   const offset = c - (clamped / 100) * c;
 
+  const isGlass = theme?.id === "neo";
   return (
     <div className="relative" style={{ width: size, height: size }}>
       <svg width={size} height={size} className="rotate-[-90deg]">
@@ -159,7 +249,7 @@ function ProgressRing({ pct, size = 56, stroke = 7, glowClass = "text-cyan-300" 
           cx={size / 2}
           cy={size / 2}
           r={r}
-          stroke="rgba(255,255,255,0.14)"
+          stroke={isGlass ? "rgba(255,255,255,0.14)" : "rgba(0,0,0,0.10)"}
           strokeWidth={stroke}
           fill="transparent"
         />
@@ -176,14 +266,11 @@ function ProgressRing({ pct, size = 56, stroke = 7, glowClass = "text-cyan-300" 
           strokeLinecap="round"
         />
       </svg>
-      <div className="absolute inset-0 rounded-full blur-2xl opacity-40 pointer-events-none">
-        <div className={cn("absolute inset-0 rounded-full", glowClass.replace("text-", "bg-") + "/20")} />
-      </div>
     </div>
   );
 }
 
-function GlassIconPlate({ children, glow = "cyan" }) {
+function GlassIconPlate({ children, glow = "cyan", theme }) {
   const glowMap = {
     cyan: "bg-cyan-400/20",
     violet: "bg-violet-500/20",
@@ -191,25 +278,34 @@ function GlassIconPlate({ children, glow = "cyan" }) {
     amber: "bg-amber-500/20",
     indigo: "bg-indigo-500/20"
   };
+
+  const plate =
+    theme.id === "neo"
+      ? theme.cardSoft
+      : theme.id === "wellness"
+        ? theme.cardSoft
+        : "border border-gray-200 bg-white shadow-[0_8px_22px_rgba(0,0,0,0.06)]";
+
   return (
     <div className="relative">
       <div className={cn("absolute inset-0 rounded-full blur-2xl", glowMap[glow] ?? glowMap.cyan)} />
-      <div className={cn("h-11 w-11 rounded-2xl flex items-center justify-center", GLASS_SOFT)}>
+      <div className={cn("h-11 w-11 rounded-2xl flex items-center justify-center", plate)}>
         {children}
       </div>
     </div>
   );
 }
 
-function GlassButton({ children, onClick, className, title, type = "button" }) {
+function SurfaceButton({ children, onClick, className, title, theme, type = "button" }) {
   return (
     <button
       type={type}
       onClick={onClick}
       title={title}
       className={cn(
-        "rounded-2xl px-4 py-3 transition hover:bg-white/[0.10] active:scale-[0.99]",
-        GLASS_SOFT,
+        "rounded-2xl px-4 py-3 transition active:scale-[0.99]",
+        theme.cardSoft,
+        theme.id === "neo" ? "hover:bg-white/[0.10]" : "hover:bg-black/[0.03]",
         className
       )}
     >
@@ -219,10 +315,14 @@ function GlassButton({ children, onClick, className, title, type = "button" }) {
 }
 
 /* =========================
- * Component
+ * App
  * ========================= */
 export default function ZenhydratationApp() {
   const [activeTab, setActiveTab] = useState("home");
+
+  // theme (persisted)
+  const [themeId, setThemeId] = useState("neo");
+  const theme = THEMES[themeId] ?? THEMES.neo;
 
   // settings
   const [waterGoal, setWaterGoal] = useState(8);
@@ -242,7 +342,6 @@ export default function ZenhydratationApp() {
   const [showNotif, setShowNotif] = useState(null); // "eye"|"stretch"|null
 
   // player
-  // { type, queue, index, remainingSec, startedAt, paused, pauseStartedAt, totalPausedMs }
   const [activeRoutine, setActiveRoutine] = useState(null);
 
   // history & stats
@@ -309,6 +408,8 @@ export default function ZenhydratationApp() {
     const s = readLS(STORAGE_STATE_KEY, null);
     if (!s) return;
 
+    if (typeof s.themeId === "string" && THEMES[s.themeId]) setThemeId(s.themeId);
+
     if (typeof s.waterGoal === "number") setWaterGoal(clampInt(s.waterGoal, 6, 12));
     if (typeof s.eyeBreakInterval === "number") setEyeBreakInterval(clampInt(s.eyeBreakInterval, 600, 7200));
     if (typeof s.stretchInterval === "number") setStretchInterval(clampInt(s.stretchInterval, 900, 10800));
@@ -354,10 +455,11 @@ export default function ZenhydratationApp() {
   }, []);
 
   /* =========================
-   * Save (debounced)
+   * Save
    * ========================= */
   useEffect(() => {
     const payload = {
+      themeId,
       waterGoal,
       eyeBreakInterval,
       stretchInterval,
@@ -378,6 +480,7 @@ export default function ZenhydratationApp() {
       if (saveDebounceRef.current) clearTimeout(saveDebounceRef.current);
     };
   }, [
+    themeId,
     waterGoal,
     eyeBreakInterval,
     stretchInterval,
@@ -390,7 +493,7 @@ export default function ZenhydratationApp() {
   ]);
 
   /* =========================
-   * Upsert today in history (max 30)
+   * Upsert today in history
    * ========================= */
   useEffect(() => {
     const current = todayStats.dayKey;
@@ -470,157 +573,6 @@ export default function ZenhydratationApp() {
   };
 
   /* =========================
-   * Hydration
-   * ========================= */
-  const addWater = () => {
-    if (waterCount < waterGoal) {
-      setWaterCount((v) => v + 1);
-      setTodayStats((s) => ({ ...s, water: s.water + 1 }));
-      if (soundEnabled) playTone({ freq: 740 });
-    }
-  };
-
-  /* =========================
-   * Quick “done” from notifs
-   * ========================= */
-  const completeEyeBreak = () => {
-    setTodayStats((s) => ({ ...s, eyeBreaks: s.eyeBreaks + 1 }));
-    setShowNotif(null);
-    if (soundEnabled) playTone({ freq: 880 });
-  };
-
-  const completeStretch = () => {
-    setTodayStats((s) => ({ ...s, stretches: s.stretches + 1 }));
-    setShowNotif(null);
-    if (soundEnabled) playTone({ freq: 660 });
-  };
-
-  /* =========================
-   * Routine player (queue)
-   * - when an exercise is selected: queue is that single exercise
-   * - when a routine starts: queue is the routine list (3 steps)
-   * ========================= */
-  const startQueue = (type, queue, startIndex = 0) => {
-    const now = Date.now();
-    setActiveRoutine({
-      type,
-      queue,
-      index: startIndex,
-      remainingSec: queue[startIndex].durationSec,
-      startedAt: now,
-      paused: false,
-      pauseStartedAt: null,
-      totalPausedMs: 0
-    });
-  };
-
-  const stopRoutine = () => setActiveRoutine(null);
-
-  const toggleRoutinePause = () => {
-    setActiveRoutine((r) => {
-      if (!r) return r;
-      if (!r.paused) {
-        return { ...r, paused: true, pauseStartedAt: Date.now() };
-      }
-      const pausedMs = r.pauseStartedAt ? Date.now() - r.pauseStartedAt : 0;
-      return { ...r, paused: false, pauseStartedAt: null, totalPausedMs: r.totalPausedMs + pausedMs };
-    });
-  };
-
-  const skipStep = () => {
-    setActiveRoutine((r) => {
-      if (!r) return r;
-      const nextIndex = r.index + 1;
-      if (nextIndex >= r.queue.length) {
-        // finishing early still counts as completed routine? We choose NO.
-        return null;
-      }
-      return { ...r, index: nextIndex, remainingSec: r.queue[nextIndex].durationSec };
-    });
-  };
-
-  const finishRoutineNow = () => {
-    if (!activeRoutine) return;
-    // credit one routine completion even if user terminates manually
-    creditCompletion(activeRoutine.type, activeRoutine.queue[activeRoutine.index]?.id);
-    setActiveRoutine(null);
-  };
-
-  const creditCompletion = (type, exIdOrNull) => {
-    const totalKeyMap = {
-      eye: "eyeBreaks",
-      stretch: "stretches",
-      wake: "wakeRoutines",
-      sleep: "sleepRoutines"
-    };
-
-    setTodayStats((s) => {
-      const totalKey = totalKeyMap[type];
-      const details = s.details ?? { eye: {}, stretch: {}, wake: {}, sleep: {} };
-      const nextDetails = { ...details };
-
-      if (exIdOrNull) {
-        const bucket = { ...(details[type] ?? {}) };
-        bucket[exIdOrNull] = (bucket[exIdOrNull] ?? 0) + 1;
-        nextDetails[type] = bucket;
-      }
-
-      return {
-        ...s,
-        [totalKey]: (s[totalKey] ?? 0) + 1,
-        details: nextDetails
-      };
-    });
-
-    if (soundEnabled) playTone({ freq: type === "sleep" ? 520 : 740, durationMs: 220 });
-  };
-
-  // routine ticking
-  useEffect(() => {
-    if (!activeRoutine) return;
-
-    const id = setInterval(() => {
-      setActiveRoutine((r) => {
-        if (!r) return null;
-        if (r.paused) return r;
-
-        if (r.remainingSec <= 1) {
-          const currentStep = r.queue[r.index];
-          // for single-exercise sessions: count 1 for the module + detail
-          // for multi-step routines: count 1 routine completion at the end (and detail per step)
-          // Here: we always store detail per step, and only increment total on final step.
-          // Additionally: for eye/stretch, if started from tiles (single exercise) queue length = 1 => end => total++.
-          // For wake/sleep, queue length = 3 => end => total++ once.
-          // Details: increment for each completed step.
-          setTodayStats((s) => {
-            const details = s.details ?? { eye: {}, stretch: {}, wake: {}, sleep: {} };
-            const bucket = { ...(details[r.type] ?? {}) };
-            if (currentStep?.id) bucket[currentStep.id] = (bucket[currentStep.id] ?? 0) + 1;
-
-            return { ...s, details: { ...details, [r.type]: bucket } };
-          });
-
-          const nextIndex = r.index + 1;
-          if (nextIndex < r.queue.length) {
-            // next step
-            if (soundEnabled) playTone({ freq: 600, durationMs: 120, gain: 0.02 });
-            return { ...r, index: nextIndex, remainingSec: r.queue[nextIndex].durationSec };
-          }
-
-          // routine finished => credit total once
-          creditCompletion(r.type, null);
-          return null;
-        }
-
-        return { ...r, remainingSec: r.remainingSec - 1 };
-      });
-    }, 1000);
-
-    return () => clearInterval(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeRoutine, soundEnabled]);
-
-  /* =========================
    * Formatting / derived
    * ========================= */
   const formatTime = (seconds) => {
@@ -632,7 +584,6 @@ export default function ZenhydratationApp() {
   const hydrationPct = Math.round((waterCount / Math.max(1, waterGoal)) * 100);
 
   const nextHero = useMemo(() => {
-    // hero prioritization: next eye vs stretch by time remaining
     const eyeSooner = eyeBreakTimer <= stretchTimer;
     const type = eyeSooner ? "eye" : "stretch";
     const label = type === "eye" ? "Pause yeux" : "Étirements";
@@ -641,22 +592,21 @@ export default function ZenhydratationApp() {
       type === "eye"
         ? ((eyeBreakInterval - eyeBreakTimer) / eyeBreakInterval) * 100
         : ((stretchInterval - stretchTimer) / stretchInterval) * 100;
-
     return { type, label, time, pct: Math.max(0, Math.min(100, pct)) };
   }, [eyeBreakTimer, stretchTimer, eyeBreakInterval, stretchInterval]);
 
   const themeGlow = (type) => {
     switch (type) {
       case "eye":
-        return { glow: "violet", ring: "text-violet-300", icon: <Eye className="h-6 w-6 text-violet-200/90" /> };
+        return { glow: "violet", ring: "text-violet-400", icon: <Eye className="h-6 w-6 text-violet-500" /> };
       case "stretch":
-        return { glow: "emerald", ring: "text-emerald-300", icon: <Activity className="h-6 w-6 text-emerald-200/90" /> };
+        return { glow: "emerald", ring: "text-emerald-400", icon: <Activity className="h-6 w-6 text-emerald-500" /> };
       case "wake":
-        return { glow: "amber", ring: "text-amber-300", icon: <Sun className="h-6 w-6 text-amber-200/90" /> };
+        return { glow: "amber", ring: "text-amber-400", icon: <Sun className="h-6 w-6 text-amber-500" /> };
       case "sleep":
-        return { glow: "indigo", ring: "text-indigo-300", icon: <Moon className="h-6 w-6 text-indigo-200/90" /> };
+        return { glow: "indigo", ring: "text-indigo-400", icon: <Moon className="h-6 w-6 text-indigo-500" /> };
       default:
-        return { glow: "cyan", ring: "text-cyan-300", icon: <Eye className="h-6 w-6 text-cyan-200/90" /> };
+        return { glow: "cyan", ring: "text-cyan-400", icon: <Eye className="h-6 w-6 text-cyan-500" /> };
     }
   };
 
@@ -689,6 +639,125 @@ export default function ZenhydratationApp() {
   }));
 
   /* =========================
+   * Actions
+   * ========================= */
+  const addWater = () => {
+    if (waterCount < waterGoal) {
+      setWaterCount((v) => v + 1);
+      setTodayStats((s) => ({ ...s, water: s.water + 1 }));
+      if (soundEnabled) playTone({ freq: 740 });
+    }
+  };
+
+  const completeEyeBreak = () => {
+    setTodayStats((s) => ({ ...s, eyeBreaks: s.eyeBreaks + 1 }));
+    setShowNotif(null);
+    if (soundEnabled) playTone({ freq: 880 });
+  };
+
+  const completeStretch = () => {
+    setTodayStats((s) => ({ ...s, stretches: s.stretches + 1 }));
+    setShowNotif(null);
+    if (soundEnabled) playTone({ freq: 660 });
+  };
+
+  /* =========================
+   * Routine player
+   * ========================= */
+  const startQueue = (type, queue, startIndex = 0) => {
+    const now = Date.now();
+    setActiveRoutine({
+      type,
+      queue,
+      index: startIndex,
+      remainingSec: queue[startIndex].durationSec,
+      startedAt: now,
+      paused: false
+    });
+  };
+
+  const stopRoutine = () => setActiveRoutine(null);
+
+  const toggleRoutinePause = () => {
+    setActiveRoutine((r) => (r ? { ...r, paused: !r.paused } : r));
+  };
+
+  const skipStep = () => {
+    setActiveRoutine((r) => {
+      if (!r) return r;
+      const nextIndex = r.index + 1;
+      if (nextIndex >= r.queue.length) return null;
+      return { ...r, index: nextIndex, remainingSec: r.queue[nextIndex].durationSec };
+    });
+  };
+
+  const creditCompletion = (type, exIdOrNull) => {
+    const totalKeyMap = {
+      eye: "eyeBreaks",
+      stretch: "stretches",
+      wake: "wakeRoutines",
+      sleep: "sleepRoutines"
+    };
+
+    setTodayStats((s) => {
+      const totalKey = totalKeyMap[type];
+      const details = s.details ?? { eye: {}, stretch: {}, wake: {}, sleep: {} };
+      const nextDetails = { ...details };
+
+      if (exIdOrNull) {
+        const bucket = { ...(details[type] ?? {}) };
+        bucket[exIdOrNull] = (bucket[exIdOrNull] ?? 0) + 1;
+        nextDetails[type] = bucket;
+      }
+
+      return {
+        ...s,
+        [totalKey]: (s[totalKey] ?? 0) + 1,
+        details: nextDetails
+      };
+    });
+
+    if (soundEnabled) playTone({ freq: type === "sleep" ? 520 : 740, durationMs: 220 });
+  };
+
+  useEffect(() => {
+    if (!activeRoutine) return;
+
+    const id = setInterval(() => {
+      setActiveRoutine((r) => {
+        if (!r) return null;
+        if (r.paused) return r;
+
+        if (r.remainingSec <= 1) {
+          const step = r.queue[r.index];
+
+          // details per step
+          setTodayStats((s) => {
+            const details = s.details ?? { eye: {}, stretch: {}, wake: {}, sleep: {} };
+            const bucket = { ...(details[r.type] ?? {}) };
+            if (step?.id) bucket[step.id] = (bucket[step.id] ?? 0) + 1;
+            return { ...s, details: { ...details, [r.type]: bucket } };
+          });
+
+          const nextIndex = r.index + 1;
+          if (nextIndex < r.queue.length) {
+            return { ...r, index: nextIndex, remainingSec: r.queue[nextIndex].durationSec };
+          }
+
+          // finished => credit total once
+          creditCompletion(r.type, null);
+          return null;
+        }
+
+        return { ...r, remainingSec: r.remainingSec - 1 };
+      });
+    }, 1000);
+
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeRoutine, soundEnabled]);
+
+  /* =========================
    * Screens
    * ========================= */
   const HomeScreen = () => {
@@ -696,122 +765,122 @@ export default function ZenhydratationApp() {
 
     return (
       <div className="px-5 pb-24 pt-6">
-        {/* Top header */}
+        {/* Header: plus de bouton Settings en haut (conformément à votre demande) */}
         <div className="flex items-start justify-between">
           <div>
-            <div className={cn("text-[34px] font-semibold tracking-tight leading-tight", TEXT_PRIMARY)}>
+            <div className={cn("text-[34px] font-semibold tracking-tight leading-tight", theme.textPrimary)}>
               Zenhydratation
             </div>
-            <div className={cn("mt-1 text-[14px] font-medium", TEXT_MUTED)}>
+            <div className={cn("mt-1 text-[14px] font-medium", theme.textMuted)}>
               Focus. Respire. Hydrate.
             </div>
 
             <div className="mt-3 flex items-center gap-3">
-              <div className={cn("rounded-2xl px-4 py-2", GLASS_SOFT)}>
-                <span className={cn("text-[13px] font-semibold", TEXT_SECONDARY)}>🔥 Série</span>{" "}
-                <span className={cn("text-[13px] font-semibold", TEXT_PRIMARY)}>{streak}j</span>
+              <div className={cn("rounded-2xl px-4 py-2", theme.cardSoft)}>
+                <span className={cn("text-[13px] font-semibold", theme.textSecondary)}>🔥 Série</span>{" "}
+                <span className={cn("text-[13px] font-semibold", theme.textPrimary)}>{streak}j</span>
               </div>
 
-              <div className={cn("rounded-2xl px-4 py-2", GLASS_SOFT)}>
-                <span className={cn("text-[13px] font-semibold", TEXT_SECONDARY)}>Mode</span>{" "}
-                <span className={cn("text-[13px] font-semibold", TEXT_PRIMARY)}>Offline</span>
+              <div className={cn("rounded-2xl px-4 py-2", theme.cardSoft)}>
+                <span className={cn("text-[13px] font-semibold", theme.textSecondary)}>Mode</span>{" "}
+                <span className={cn("text-[13px] font-semibold", theme.textPrimary)}>Offline</span>
               </div>
             </div>
           </div>
 
-          <div className="flex gap-3">
-            <button
-              onClick={() => setShowSettings(true)}
-              className={cn("h-11 w-11 rounded-2xl flex items-center justify-center transition hover:bg-white/[0.10]", GLASS_SOFT)}
-              aria-label="Paramètres"
-            >
-              <Settings className="h-5 w-5 text-white/75" />
-            </button>
-
-            <button
-              onClick={() => setIsPaused((p) => !p)}
-              className={cn("h-11 w-11 rounded-2xl flex items-center justify-center transition hover:bg-white/[0.10]", GLASS_SOFT)}
-              title={isPaused ? "Reprendre" : "Pause"}
-              aria-label={isPaused ? "Reprendre" : "Pause"}
-            >
-              {isPaused ? <Play className="h-5 w-5 text-white/85" /> : <Pause className="h-5 w-5 text-white/85" />}
-            </button>
-          </div>
+          <button
+            onClick={() => setIsPaused((p) => !p)}
+            className={cn("h-11 w-11 rounded-2xl flex items-center justify-center transition", theme.cardSoft, theme.id === "neo" ? "hover:bg-white/[0.10]" : "hover:bg-black/[0.03]")}
+            title={isPaused ? "Reprendre" : "Pause"}
+            aria-label={isPaused ? "Reprendre" : "Pause"}
+          >
+            {isPaused ? <Play className={cn("h-5 w-5", theme.id === "neo" ? "text-white/85" : "text-gray-700")} /> : <Pause className={cn("h-5 w-5", theme.id === "neo" ? "text-white/85" : "text-gray-700")} />}
+          </button>
         </div>
 
-        {/* Hero “À faire maintenant” */}
-        <div className={cn("mt-6 rounded-[28px] p-6", GLASS)}>
+        {/* Hero */}
+        <div className={cn("mt-6 rounded-[28px] p-6", theme.card)}>
           <div className="flex items-center gap-5">
-            <GlassIconPlate glow={heroTheme.glow}>{heroTheme.icon}</GlassIconPlate>
+            <GlassIconPlate glow={heroTheme.glow} theme={theme}>
+              {theme.id === "neo"
+                ? React.cloneElement(heroTheme.icon, { className: "h-6 w-6 text-white/85" })
+                : heroTheme.icon}
+            </GlassIconPlate>
 
             <div className="flex-1 min-w-0">
-              <div className={cn("text-[28px] font-semibold leading-none", TEXT_PRIMARY)}>
+              <div className={cn("text-[28px] font-semibold leading-none", theme.textPrimary)}>
                 {nextHero.label}
               </div>
-              <div className={cn("mt-2 text-[18px] font-medium", TEXT_SECONDARY)}>
+              <div className={cn("mt-2 text-[18px] font-medium", theme.textSecondary)}>
                 Dans {nextHero.time}
               </div>
             </div>
 
-            <ProgressRing pct={nextHero.pct} size={56} stroke={7} glowClass={heroTheme.ring} />
+            <ProgressRing pct={nextHero.pct} size={56} stroke={7} glowClass={heroTheme.ring} theme={theme} />
           </div>
 
           <div className="mt-6 flex justify-end">
             <button
               onClick={() => {
-                // open list for that module
                 setShowExercise(nextHero.type);
                 if (soundEnabled) playTone({ freq: 520, gain: 0.02 });
               }}
               className={cn(
-                "rounded-full px-10 py-3 text-[16px] font-semibold tracking-wide",
-                "border border-white/10 bg-gradient-to-b from-white/[0.10] to-white/[0.06] hover:from-white/[0.14] hover:to-white/[0.08] transition",
-                "shadow-[0_14px_30px_rgba(0,0,0,0.35)]"
+                "rounded-full px-10 py-3 text-[16px] font-semibold tracking-wide transition shadow-[0_14px_30px_rgba(0,0,0,0.25)]",
+                theme.id === "neo"
+                  ? "border border-white/10 bg-gradient-to-b from-white/[0.10] to-white/[0.06] hover:from-white/[0.14] hover:to-white/[0.08]"
+                  : "border border-black/10 bg-black/[0.03] hover:bg-black/[0.05]"
               )}
             >
-              <span className={TEXT_PRIMARY}>DÉMARRER</span>
+              <span className={theme.textPrimary}>DÉMARRER</span>
             </button>
           </div>
         </div>
 
         {/* Hydration */}
-        <div className={cn("mt-6 rounded-[28px] p-6", GLASS)}>
+        <div className={cn("mt-6 rounded-[28px] p-6", theme.card)}>
           <div className="flex items-end justify-between">
-            <div className={cn("text-[28px] font-semibold leading-none", TEXT_PRIMARY)}>
+            <div className={cn("text-[28px] font-semibold leading-none", theme.textPrimary)}>
               Hydratation
             </div>
-            <div className={cn("text-[16px] font-semibold", TEXT_SECONDARY)}>
+            <div className={cn("text-[16px] font-semibold", theme.textSecondary)}>
               {waterCount} / {waterGoal} verres
             </div>
           </div>
 
           <div className="mt-5">
-            <div className="h-3 w-full rounded-full bg-white/10 overflow-hidden border border-white/10">
+            <div className={cn("h-3 w-full rounded-full overflow-hidden", theme.id === "neo" ? "bg-white/10 border border-white/10" : "bg-gray-100 border border-gray-200")}>
               <div
-                className="h-full rounded-full bg-gradient-to-r from-cyan-400/70 to-blue-400/70"
+                className={cn(
+                  "h-full rounded-full",
+                  theme.id === "neo"
+                    ? "bg-gradient-to-r from-cyan-400/70 to-blue-400/70"
+                    : "bg-gradient-to-r from-blue-500/70 to-cyan-500/70"
+                )}
                 style={{ width: `${Math.max(0, Math.min(100, hydrationPct))}%` }}
               />
             </div>
 
             <button
               onClick={addWater}
-              className={cn("mt-5 w-full text-left text-[22px] font-medium hover:text-white/85 transition", TEXT_SECONDARY)}
+              className={cn("mt-5 w-full text-left text-[22px] font-medium transition", theme.textSecondary, theme.id === "neo" ? "hover:text-white/85" : "hover:text-gray-900")}
             >
               Ajouter un verre
             </button>
           </div>
         </div>
 
-        {/* Shortcuts tiles 2x2 */}
+        {/* Shortcuts */}
         <div className="mt-7">
-          <div className={cn("text-[28px] font-semibold", TEXT_PRIMARY)}>Raccourcis</div>
+          <div className={cn("text-[28px] font-semibold", theme.textPrimary)}>Raccourcis</div>
 
           <div className="mt-5 grid grid-cols-2 gap-4">
             <ShortcutTile
               title="Yeux"
               subtitle={formatTime(eyeBreakTimer)}
               glow="violet"
-              icon={<Eye className="h-6 w-6 text-violet-200/90" />}
+              theme={theme}
+              icon={theme.id === "neo" ? <Eye className="h-6 w-6 text-white/85" /> : <Eye className="h-6 w-6 text-violet-600" />}
               onClick={() => setShowExercise("eye")}
             />
 
@@ -819,7 +888,8 @@ export default function ZenhydratationApp() {
               title="Étirements"
               subtitle={formatTime(stretchTimer)}
               glow="emerald"
-              icon={<Activity className="h-6 w-6 text-emerald-200/90" />}
+              theme={theme}
+              icon={theme.id === "neo" ? <Activity className="h-6 w-6 text-white/85" /> : <Activity className="h-6 w-6 text-emerald-600" />}
               onClick={() => setShowExercise("stretch")}
             />
 
@@ -827,7 +897,8 @@ export default function ZenhydratationApp() {
               title="Réveil"
               subtitle={`${exercises.wake.length} étapes`}
               glow="amber"
-              icon={<Sun className="h-6 w-6 text-amber-200/90" />}
+              theme={theme}
+              icon={theme.id === "neo" ? <Sun className="h-6 w-6 text-white/85" /> : <Sun className="h-6 w-6 text-amber-600" />}
               onClick={() => startQueue("wake", exercises.wake)}
             />
 
@@ -835,14 +906,14 @@ export default function ZenhydratationApp() {
               title="Coucher"
               subtitle={`${exercises.sleep.length} étapes`}
               glow="indigo"
-              icon={<Moon className="h-6 w-6 text-indigo-200/90" />}
+              theme={theme}
+              icon={theme.id === "neo" ? <Moon className="h-6 w-6 text-white/85" /> : <Moon className="h-6 w-6 text-indigo-600" />}
               onClick={() => startQueue("sleep", exercises.sleep)}
             />
           </div>
         </div>
 
-        {/* Today line */}
-        <div className={cn("mt-7 text-[14px] leading-snug", TEXT_MUTED)}>
+        <div className={cn("mt-7 text-[14px] leading-snug", theme.textMuted)}>
           Aujourd&apos;hui: Eau {todayStats.water} | Yeux {todayStats.eyeBreaks} | Étirements {todayStats.stretches}
           <br />
           Réveil {todayStats.wakeRoutines} | Coucher {todayStats.sleepRoutines}
@@ -858,16 +929,16 @@ export default function ZenhydratationApp() {
     const renderDetail = (groupKey, title) => {
       const entries = Object.entries(todayStats.details?.[groupKey] ?? {});
       return (
-        <div className={cn("rounded-[24px] p-5", GLASS_SOFT)}>
-          <div className={cn("text-[16px] font-semibold", TEXT_PRIMARY)}>{title}</div>
+        <div className={cn("rounded-[24px] p-5", theme.cardSoft)}>
+          <div className={cn("text-[16px] font-semibold", theme.textPrimary)}>{title}</div>
           {entries.length === 0 ? (
-            <div className={cn("mt-2 text-[13px]", TEXT_MUTED)}>Aucune donnée.</div>
+            <div className={cn("mt-2 text-[13px]", theme.textMuted)}>Aucune donnée.</div>
           ) : (
             <div className="mt-3 space-y-2">
               {entries.map(([id, count]) => (
                 <div key={id} className="flex items-center justify-between">
-                  <div className={cn("text-[13px] font-medium", TEXT_SECONDARY)}>{labelsById[id] ?? id}</div>
-                  <div className={cn("text-[13px] font-semibold", TEXT_PRIMARY)}>{count}</div>
+                  <div className={cn("text-[13px] font-medium", theme.textSecondary)}>{labelsById[id] ?? id}</div>
+                  <div className={cn("text-[13px] font-semibold", theme.textPrimary)}>{count}</div>
                 </div>
               ))}
             </div>
@@ -876,50 +947,50 @@ export default function ZenhydratationApp() {
       );
     };
 
+    const tooltipStyle = {
+      background: theme.tooltip.background,
+      border: theme.tooltip.border,
+      borderRadius: 14,
+      color: theme.tooltip.color
+    };
+
     return (
       <div className="px-5 pb-24 pt-6 space-y-6">
         <div className="flex items-end justify-between">
-          <div className={cn("text-[28px] font-semibold", TEXT_PRIMARY)}>Statistiques</div>
-          <div className={cn("rounded-2xl px-4 py-2", GLASS_SOFT)}>
-            <span className={cn("text-[13px] font-semibold", TEXT_SECONDARY)}>🔥 {streak}j</span>
+          <div className={cn("text-[28px] font-semibold", theme.textPrimary)}>Statistiques</div>
+          <div className={cn("rounded-2xl px-4 py-2", theme.cardSoft)}>
+            <span className={cn("text-[13px] font-semibold", theme.textSecondary)}>🔥 {streak}j</span>
           </div>
         </div>
 
-        <div className={cn("rounded-[28px] p-6", GLASS)}>
+        <div className={cn("rounded-[28px] p-6", theme.card)}>
           <div className="flex items-center gap-3">
-            <Clock className="h-6 w-6 text-white/80" />
+            <Clock className={cn("h-6 w-6", theme.id === "neo" ? "text-white/80" : "text-gray-700")} />
             <div>
-              <div className={cn("text-[13px] font-semibold", TEXT_MUTED)}>Temps de travail aujourd&apos;hui</div>
-              <div className={cn("text-[26px] font-semibold", TEXT_PRIMARY)}>{workH}h {workM}m</div>
+              <div className={cn("text-[13px] font-semibold", theme.textMuted)}>Temps de travail aujourd&apos;hui</div>
+              <div className={cn("text-[26px] font-semibold", theme.textPrimary)}>{workH}h {workM}m</div>
             </div>
           </div>
         </div>
 
-        <div className={cn("rounded-[28px] p-6", GLASS)}>
+        <div className={cn("rounded-[28px] p-6", theme.card)}>
           <div className="flex items-center justify-between">
-            <div className={cn("text-[16px] font-semibold", TEXT_PRIMARY)}>Résumé 7 jours</div>
-            <div className={cn("text-[13px] font-semibold", TEXT_MUTED)}>
-              Eau {sum(window7, "water")} · Yeux {sum(window7, "eyeBreaks")} · Étire {sum(window7, "stretches")}
+            <div className={cn("text-[16px] font-semibold", theme.textPrimary)}>Graphique 7 jours</div>
+            <div className={cn("text-[13px] font-semibold", theme.textMuted)}>
+              Eau {sum(window7, "water")} · Routines {sum(window7, "wakeRoutines") + sum(window7, "sleepRoutines")}
             </div>
           </div>
 
           <div className="mt-4" style={{ width: "100%", height: 260 }}>
             {chart7.length === 0 ? (
-              <div className={cn("text-[13px]", TEXT_MUTED)}>Aucune donnée pour l’instant.</div>
+              <div className={cn("text-[13px]", theme.textMuted)}>Aucune donnée pour l’instant.</div>
             ) : (
               <ResponsiveContainer>
                 <BarChart data={chart7}>
-                  <XAxis dataKey="day" tick={{ fill: "rgba(255,255,255,0.65)", fontSize: 12 }} />
-                  <YAxis allowDecimals={false} tick={{ fill: "rgba(255,255,255,0.65)", fontSize: 12 }} />
-                  <Tooltip
-                    contentStyle={{
-                      background: "rgba(10, 12, 18, 0.92)",
-                      border: "1px solid rgba(255,255,255,0.10)",
-                      borderRadius: 14,
-                      color: "rgba(255,255,255,0.9)"
-                    }}
-                  />
-                  <Legend wrapperStyle={{ color: "rgba(255,255,255,0.7)" }} />
+                  <XAxis dataKey="day" tick={{ fill: theme.id === "neo" ? "rgba(255,255,255,0.65)" : "rgba(15,23,42,0.60)", fontSize: 12 }} />
+                  <YAxis allowDecimals={false} tick={{ fill: theme.id === "neo" ? "rgba(255,255,255,0.65)" : "rgba(15,23,42,0.60)", fontSize: 12 }} />
+                  <Tooltip contentStyle={tooltipStyle} />
+                  <Legend wrapperStyle={{ color: theme.id === "neo" ? "rgba(255,255,255,0.7)" : "rgba(15,23,42,0.65)" }} />
                   <Bar dataKey="water" name="Eau" fill="rgba(34, 211, 238, 0.60)" />
                   <Bar dataKey="eye" name="Yeux" fill="rgba(167, 139, 250, 0.60)" />
                   <Bar dataKey="stretch" name="Étirements" fill="rgba(52, 211, 153, 0.60)" />
@@ -931,31 +1002,24 @@ export default function ZenhydratationApp() {
           </div>
         </div>
 
-        <div className={cn("rounded-[28px] p-6", GLASS)}>
+        <div className={cn("rounded-[28px] p-6", theme.card)}>
           <div className="flex items-center justify-between">
-            <div className={cn("text-[16px] font-semibold", TEXT_PRIMARY)}>Graphique 30 jours</div>
-            <div className={cn("text-[13px] font-semibold", TEXT_MUTED)}>
-              Total routines: {sum(window30, "wakeRoutines") + sum(window30, "sleepRoutines")}
+            <div className={cn("text-[16px] font-semibold", theme.textPrimary)}>Graphique 30 jours</div>
+            <div className={cn("text-[13px] font-semibold", theme.textMuted)}>
+              Total jours: {window30.length}
             </div>
           </div>
 
           <div className="mt-4" style={{ width: "100%", height: 260 }}>
             {chart30.length === 0 ? (
-              <div className={cn("text-[13px]", TEXT_MUTED)}>Aucune donnée sur 30 jours.</div>
+              <div className={cn("text-[13px]", theme.textMuted)}>Aucune donnée sur 30 jours.</div>
             ) : (
               <ResponsiveContainer>
                 <BarChart data={chart30}>
-                  <XAxis dataKey="day" tick={{ fill: "rgba(255,255,255,0.65)", fontSize: 12 }} />
-                  <YAxis allowDecimals={false} tick={{ fill: "rgba(255,255,255,0.65)", fontSize: 12 }} />
-                  <Tooltip
-                    contentStyle={{
-                      background: "rgba(10, 12, 18, 0.92)",
-                      border: "1px solid rgba(255,255,255,0.10)",
-                      borderRadius: 14,
-                      color: "rgba(255,255,255,0.9)"
-                    }}
-                  />
-                  <Legend wrapperStyle={{ color: "rgba(255,255,255,0.7)" }} />
+                  <XAxis dataKey="day" tick={{ fill: theme.id === "neo" ? "rgba(255,255,255,0.65)" : "rgba(15,23,42,0.60)", fontSize: 12 }} />
+                  <YAxis allowDecimals={false} tick={{ fill: theme.id === "neo" ? "rgba(255,255,255,0.65)" : "rgba(15,23,42,0.60)", fontSize: 12 }} />
+                  <Tooltip contentStyle={tooltipStyle} />
+                  <Legend wrapperStyle={{ color: theme.id === "neo" ? "rgba(255,255,255,0.7)" : "rgba(15,23,42,0.65)" }} />
                   <Bar dataKey="water" name="Eau" fill="rgba(34, 211, 238, 0.55)" />
                   <Bar dataKey="eye" name="Yeux" fill="rgba(167, 139, 250, 0.55)" />
                   <Bar dataKey="stretch" name="Étirements" fill="rgba(52, 211, 153, 0.55)" />
@@ -979,14 +1043,11 @@ export default function ZenhydratationApp() {
 
   /* =========================
    * Exercise selection modal
-   * - click an exercise -> play only that exercise (queue length 1)
-   * - for wake/sleep, also offer a “Démarrer la routine” CTA
    * ========================= */
   const ExerciseModal = () => {
     if (!showExercise) return null;
 
     const list = exercises[showExercise] ?? [];
-    const theme = themeGlow(showExercise);
     const title =
       showExercise === "eye"
         ? "👁️ Exercices Yeux"
@@ -998,20 +1059,20 @@ export default function ZenhydratationApp() {
 
     return (
       <div className="fixed inset-0 z-50">
-        <div className="absolute inset-0 bg-black/55" onClick={() => setShowExercise(null)} />
+        <div className={cn("absolute inset-0", theme.modalBackdrop)} onClick={() => setShowExercise(null)} />
         <div className="absolute inset-x-0 bottom-0">
-          <div className={cn("mx-auto max-w-md rounded-t-[32px] p-6", GLASS, "border-b-0")}>
+          <div className={cn("mx-auto max-w-md rounded-t-[32px] p-6", theme.card, "border-b-0")}>
             <div className="flex items-center justify-between">
-              <div className={cn("text-[18px] font-semibold", TEXT_PRIMARY)}>{title}</div>
+              <div className={cn("text-[18px] font-semibold", theme.textPrimary)}>{title}</div>
               <button
                 onClick={() => setShowExercise(null)}
-                className={cn("h-10 w-10 rounded-2xl flex items-center justify-center hover:bg-white/[0.10] transition", GLASS_SOFT)}
+                className={cn("h-10 w-10 rounded-2xl flex items-center justify-center transition", theme.cardSoft, theme.id === "neo" ? "hover:bg-white/[0.10]" : "hover:bg-black/[0.03]")}
               >
-                <X className="h-5 w-5 text-white/75" />
+                <X className={cn("h-5 w-5", theme.id === "neo" ? "text-white/75" : "text-gray-600")} />
               </button>
             </div>
 
-            {showExercise === "wake" || showExercise === "sleep" ? (
+            {(showExercise === "wake" || showExercise === "sleep") && (
               <div className="mt-4">
                 <button
                   onClick={() => {
@@ -1021,13 +1082,15 @@ export default function ZenhydratationApp() {
                   }}
                   className={cn(
                     "w-full rounded-2xl px-4 py-3 font-semibold text-[15px] transition",
-                    "border border-white/10 bg-gradient-to-b from-white/[0.10] to-white/[0.06] hover:from-white/[0.14] hover:to-white/[0.08]"
+                    theme.id === "neo"
+                      ? "border border-white/10 bg-gradient-to-b from-white/[0.10] to-white/[0.06] hover:from-white/[0.14] hover:to-white/[0.08]"
+                      : "border border-black/10 bg-black/[0.03] hover:bg-black/[0.05]"
                   )}
                 >
-                  <span className={TEXT_PRIMARY}>Démarrer la routine complète</span>
+                  <span className={theme.textPrimary}>Démarrer la routine complète</span>
                 </button>
               </div>
-            ) : null}
+            )}
 
             <div className="mt-4 space-y-3 max-h-[52vh] overflow-y-auto pr-1">
               {list.map((ex) => (
@@ -1039,32 +1102,18 @@ export default function ZenhydratationApp() {
                     if (soundEnabled) playTone({ freq: 600, durationMs: 120, gain: 0.02 });
                   }}
                   className={cn(
-                    "w-full text-left rounded-[22px] p-4 transition hover:bg-white/[0.10] active:scale-[0.99]",
-                    GLASS_SOFT
+                    "w-full text-left rounded-[22px] p-4 transition active:scale-[0.99]",
+                    theme.cardSoft,
+                    theme.id === "neo" ? "hover:bg-white/[0.10]" : "hover:bg-black/[0.03]"
                   )}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <div className={cn("text-[15px] font-semibold truncate", TEXT_PRIMARY)}>{ex.name}</div>
-                      <div className={cn("mt-1 text-[13px] leading-snug", TEXT_MUTED)}>{ex.desc}</div>
+                      <div className={cn("text-[15px] font-semibold truncate", theme.textPrimary)}>{ex.name}</div>
+                      <div className={cn("mt-1 text-[13px] leading-snug", theme.textMuted)}>{ex.desc}</div>
                     </div>
-                    <div className={cn("shrink-0 rounded-full px-3 py-1 text-[12px] font-semibold", "bg-white/10 border border-white/10")}>
-                      <span className={TEXT_SECONDARY}>{ex.durationSec}s</span>
-                    </div>
-                  </div>
-                  <div className="mt-3 flex items-center justify-between">
-                    <div className={cn("text-[12px] font-semibold", TEXT_MUTED)}>Démarrer</div>
-                    <div className="flex items-center gap-2">
-                      <div className={cn("h-2 w-2 rounded-full", theme.ring.replace("text-", "bg-") + "/70")} />
-                      <div className={cn("text-[12px] font-semibold", TEXT_MUTED)}>
-                        {showExercise === "eye"
-                          ? "Yeux"
-                          : showExercise === "stretch"
-                            ? "Étirements"
-                            : showExercise === "wake"
-                              ? "Réveil"
-                              : "Coucher"}
-                      </div>
+                    <div className={cn("shrink-0 rounded-full px-3 py-1 text-[12px] font-semibold", theme.id === "neo" ? "bg-white/10 border border-white/10" : "bg-black/[0.03] border border-black/10")}>
+                      <span className={theme.textSecondary}>{ex.durationSec}s</span>
                     </div>
                   </div>
                 </button>
@@ -1077,7 +1126,7 @@ export default function ZenhydratationApp() {
   };
 
   /* =========================
-   * Routine player overlay (Neo Glass)
+   * Routine player overlay
    * ========================= */
   const RoutinePlayer = () => {
     if (!activeRoutine) return null;
@@ -1091,12 +1140,12 @@ export default function ZenhydratationApp() {
 
     return (
       <div className="fixed inset-0 z-50">
-        <div className="absolute inset-0 bg-black/70" />
+        <div className={cn("absolute inset-0", theme.id === "neo" ? "bg-black/70" : "bg-black/50")} />
         <div className="absolute inset-0 flex items-center justify-center p-5">
-          <div className={cn("w-full max-w-md rounded-[32px] p-6", GLASS)}>
+          <div className={cn("w-full max-w-md rounded-[32px] p-6", theme.card)}>
             <div className="flex items-start justify-between">
               <div>
-                <div className={cn("text-[16px] font-semibold", TEXT_PRIMARY)}>
+                <div className={cn("text-[16px] font-semibold", theme.textPrimary)}>
                   {activeRoutine.type === "eye"
                     ? "Pause yeux"
                     : activeRoutine.type === "stretch"
@@ -1105,28 +1154,27 @@ export default function ZenhydratationApp() {
                         ? "Routine Réveil"
                         : "Routine Coucher"}
                 </div>
-                <div className={cn("mt-1 text-[13px] font-semibold", TEXT_MUTED)}>
+                <div className={cn("mt-1 text-[13px] font-semibold", theme.textMuted)}>
                   Étape {stepNo}/{totalSteps}
                 </div>
               </div>
               <button
                 onClick={stopRoutine}
-                className={cn("h-10 w-10 rounded-2xl flex items-center justify-center hover:bg-white/[0.10] transition", GLASS_SOFT)}
+                className={cn("h-10 w-10 rounded-2xl flex items-center justify-center transition", theme.cardSoft, theme.id === "neo" ? "hover:bg-white/[0.10]" : "hover:bg-black/[0.03]")}
                 aria-label="Fermer"
               >
-                <X className="h-5 w-5 text-white/75" />
+                <X className={cn("h-5 w-5", theme.id === "neo" ? "text-white/75" : "text-gray-600")} />
               </button>
             </div>
 
             <div className="mt-6 flex items-center justify-center">
               <div className="relative">
-                <div className={cn("absolute inset-0 rounded-full blur-3xl opacity-60", t.ring.replace("text-", "bg-") + "/20")} />
-                <ProgressRing pct={pct} size={160} stroke={10} glowClass={t.ring} />
+                <ProgressRing pct={pct} size={160} stroke={10} glowClass={t.ring} theme={theme} />
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <div className={cn("text-[44px] font-semibold leading-none", TEXT_PRIMARY)}>
+                  <div className={cn("text-[44px] font-semibold leading-none", theme.textPrimary)}>
                     {activeRoutine.remainingSec}s
                   </div>
-                  <div className={cn("mt-2 text-[13px] font-semibold", TEXT_MUTED)}>
+                  <div className={cn("mt-2 text-[13px] font-semibold", theme.textMuted)}>
                     {activeRoutine.paused ? "En pause" : "En cours"}
                   </div>
                 </div>
@@ -1134,40 +1182,43 @@ export default function ZenhydratationApp() {
             </div>
 
             <div className="mt-6">
-              <div className={cn("text-[18px] font-semibold", TEXT_PRIMARY)}>
+              <div className={cn("text-[18px] font-semibold", theme.textPrimary)}>
                 {step?.name ?? "Exercice"}
               </div>
-              <div className={cn("mt-2 text-[13px] leading-snug", TEXT_SECONDARY)}>
+              <div className={cn("mt-2 text-[13px] leading-snug", theme.textSecondary)}>
                 {step?.desc ?? ""}
               </div>
             </div>
 
             <div className="mt-6 grid grid-cols-3 gap-3">
-              <GlassButton
-                onClick={toggleRoutinePause}
-                className="text-center"
-                title={activeRoutine.paused ? "Reprendre" : "Pause"}
-              >
+              <SurfaceButton onClick={toggleRoutinePause} theme={theme} className="text-center" title={activeRoutine.paused ? "Reprendre" : "Pause"}>
                 <div className="flex items-center justify-center gap-2">
-                  {activeRoutine.paused ? <Play className="h-4 w-4 text-white/85" /> : <Pause className="h-4 w-4 text-white/85" />}
-                  <span className={cn("text-[13px] font-semibold", TEXT_PRIMARY)}>
+                  {activeRoutine.paused ? <Play className={cn("h-4 w-4", theme.id === "neo" ? "text-white/85" : "text-gray-700")} /> : <Pause className={cn("h-4 w-4", theme.id === "neo" ? "text-white/85" : "text-gray-700")} />}
+                  <span className={cn("text-[13px] font-semibold", theme.textPrimary)}>
                     {activeRoutine.paused ? "Reprendre" : "Pause"}
                   </span>
                 </div>
-              </GlassButton>
+              </SurfaceButton>
 
-              <GlassButton onClick={skipStep} className="text-center" title="Passer">
-                <div className="flex items-center justify-center gap-2">
-                  <span className={cn("text-[13px] font-semibold", TEXT_PRIMARY)}>Passer</span>
-                </div>
-              </GlassButton>
+              <SurfaceButton onClick={skipStep} theme={theme} className="text-center" title="Passer">
+                <span className={cn("text-[13px] font-semibold", theme.textPrimary)}>Passer</span>
+              </SurfaceButton>
 
-              <GlassButton onClick={finishRoutineNow} className="text-center" title="Terminer">
+              <SurfaceButton
+                onClick={() => {
+                  // credit finish
+                  creditCompletion(activeRoutine.type, null);
+                  setActiveRoutine(null);
+                }}
+                theme={theme}
+                className="text-center"
+                title="Terminer"
+              >
                 <div className="flex items-center justify-center gap-2">
-                  <Check className="h-4 w-4 text-white/85" />
-                  <span className={cn("text-[13px] font-semibold", TEXT_PRIMARY)}>Terminer</span>
+                  <Check className={cn("h-4 w-4", theme.id === "neo" ? "text-white/85" : "text-gray-700")} />
+                  <span className={cn("text-[13px] font-semibold", theme.textPrimary)}>Terminer</span>
                 </div>
-              </GlassButton>
+              </SurfaceButton>
             </div>
           </div>
         </div>
@@ -1176,7 +1227,7 @@ export default function ZenhydratationApp() {
   };
 
   /* =========================
-   * Notifications cards (glass)
+   * Notif cards
    * ========================= */
   const NotifCard = ({ type }) => {
     const title = type === "eye" ? "Pause yeux" : "Étirements";
@@ -1186,33 +1237,39 @@ export default function ZenhydratationApp() {
 
     return (
       <div className="absolute top-4 left-4 right-4 z-50">
-        <div className={cn("rounded-[24px] p-5", GLASS)}>
+        <div className={cn("rounded-[24px] p-5", theme.card)}>
           <div className="flex items-start justify-between">
             <div className="flex items-start gap-3">
-              <GlassIconPlate glow={t.glow}>{t.icon}</GlassIconPlate>
+              <GlassIconPlate glow={t.glow} theme={theme}>
+                {theme.id === "neo"
+                  ? React.cloneElement(t.icon, { className: "h-6 w-6 text-white/85" })
+                  : t.icon}
+              </GlassIconPlate>
               <div>
-                <div className={cn("text-[15px] font-semibold", TEXT_PRIMARY)}>{title}</div>
-                <div className={cn("mt-1 text-[13px]", TEXT_MUTED)}>{subtitle}</div>
+                <div className={cn("text-[15px] font-semibold", theme.textPrimary)}>{title}</div>
+                <div className={cn("mt-1 text-[13px]", theme.textMuted)}>{subtitle}</div>
               </div>
             </div>
             <button
               onClick={() => setShowNotif(null)}
-              className={cn("h-10 w-10 rounded-2xl flex items-center justify-center hover:bg-white/[0.10] transition", GLASS_SOFT)}
+              className={cn("h-10 w-10 rounded-2xl flex items-center justify-center transition", theme.cardSoft, theme.id === "neo" ? "hover:bg-white/[0.10]" : "hover:bg-black/[0.03]")}
             >
-              <X className="h-5 w-5 text-white/75" />
+              <X className={cn("h-5 w-5", theme.id === "neo" ? "text-white/75" : "text-gray-600")} />
             </button>
           </div>
 
-          <div className={cn("mt-3 text-[13px]", TEXT_SECONDARY)}>{text}</div>
+          <div className={cn("mt-3 text-[13px]", theme.textSecondary)}>{text}</div>
 
           <button
             onClick={type === "eye" ? completeEyeBreak : completeStretch}
             className={cn(
               "mt-4 w-full rounded-2xl px-4 py-3 font-semibold text-[14px] transition",
-              "border border-white/10 bg-gradient-to-b from-white/[0.12] to-white/[0.06] hover:from-white/[0.16] hover:to-white/[0.08]"
+              theme.id === "neo"
+                ? "border border-white/10 bg-gradient-to-b from-white/[0.12] to-white/[0.06] hover:from-white/[0.16] hover:to-white/[0.08]"
+                : "border border-black/10 bg-black/[0.03] hover:bg-black/[0.05]"
             )}
           >
-            <span className={TEXT_PRIMARY}>C’est fait</span>
+            <span className={theme.textPrimary}>C’est fait</span>
           </button>
         </div>
       </div>
@@ -1223,33 +1280,22 @@ export default function ZenhydratationApp() {
    * Render
    * ========================= */
   return (
-    <div className="min-h-screen w-full flex justify-center bg-[#070A12]">
-      {/* Background gradient + ambient blobs */}
-      <div className="fixed inset-0 bg-gradient-to-b from-[#070A12] via-[#0B1022] to-[#1A0B2E]" />
-      <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute -top-24 -left-16 h-72 w-72 rounded-full bg-cyan-500/10 blur-3xl" />
-        <div className="absolute top-48 -right-24 h-80 w-80 rounded-full bg-violet-500/10 blur-3xl" />
-        <div className="absolute bottom-0 left-8 h-72 w-72 rounded-full bg-indigo-500/10 blur-3xl" />
-      </div>
+    <div className={cn("min-h-screen w-full flex justify-center", theme.bgRoot)}>
+      {theme.bgLayer}
 
       <div className="relative w-full max-w-md">
-        {/* In-app Notifs */}
         {showNotif === "eye" && <NotifCard type="eye" />}
         {showNotif === "stretch" && <NotifCard type="stretch" />}
 
-        {/* Main content */}
         {activeTab === "home" && <HomeScreen />}
         {activeTab === "stats" && <StatsScreen />}
 
-        {/* Bottom nav (glass) */}
+        {/* Bottom nav (réglages uniquement ici) */}
         <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto px-5 pb-5">
-          <div className={cn("rounded-[26px] px-6 py-4 flex items-center justify-around", GLASS)}>
+          <div className={cn("rounded-[26px] px-6 py-4 flex items-center justify-around", theme.nav)}>
             <button
               onClick={() => setActiveTab("home")}
-              className={cn(
-                "flex flex-col items-center gap-1 transition",
-                activeTab === "home" ? "text-white/90" : "text-white/55"
-              )}
+              className={cn("flex flex-col items-center gap-1 transition", activeTab === "home" ? theme.textPrimary : theme.textMuted)}
             >
               <Home className="h-6 w-6" />
               <span className="text-[11px] font-semibold">Accueil</span>
@@ -1257,10 +1303,7 @@ export default function ZenhydratationApp() {
 
             <button
               onClick={() => setActiveTab("stats")}
-              className={cn(
-                "flex flex-col items-center gap-1 transition",
-                activeTab === "stats" ? "text-white/90" : "text-white/55"
-              )}
+              className={cn("flex flex-col items-center gap-1 transition", activeTab === "stats" ? theme.textPrimary : theme.textMuted)}
             >
               <TrendingUp className="h-6 w-6" />
               <span className="text-[11px] font-semibold">Stats</span>
@@ -1268,7 +1311,7 @@ export default function ZenhydratationApp() {
 
             <button
               onClick={() => setShowSettings(true)}
-              className={cn("flex flex-col items-center gap-1 transition", "text-white/55 hover:text-white/80")}
+              className={cn("flex flex-col items-center gap-1 transition", showSettings ? theme.textPrimary : theme.textMuted)}
             >
               <Settings className="h-6 w-6" />
               <span className="text-[11px] font-semibold">Réglages</span>
@@ -1276,31 +1319,50 @@ export default function ZenhydratationApp() {
           </div>
         </div>
 
-        {/* Exercise selection modal */}
         <ExerciseModal />
-
-        {/* Routine player */}
         <RoutinePlayer />
 
-        {/* Settings modal */}
+        {/* Settings modal (contient le sélecteur de thème) */}
         {showSettings && (
           <div className="fixed inset-0 z-50">
-            <div className="absolute inset-0 bg-black/55" onClick={() => setShowSettings(false)} />
+            <div className={cn("absolute inset-0", theme.modalBackdrop)} onClick={() => setShowSettings(false)} />
             <div className="absolute inset-x-0 bottom-0">
-              <div className={cn("mx-auto max-w-md rounded-t-[32px] p-6", GLASS, "border-b-0")}>
+              <div className={cn("mx-auto max-w-md rounded-t-[32px] p-6", theme.card, "border-b-0")}>
                 <div className="flex items-center justify-between">
-                  <div className={cn("text-[18px] font-semibold", TEXT_PRIMARY)}>Paramètres</div>
+                  <div className={cn("text-[18px] font-semibold", theme.textPrimary)}>Paramètres</div>
                   <button
                     onClick={() => setShowSettings(false)}
-                    className={cn("h-10 w-10 rounded-2xl flex items-center justify-center hover:bg-white/[0.10] transition", GLASS_SOFT)}
+                    className={cn("h-10 w-10 rounded-2xl flex items-center justify-center transition", theme.cardSoft, theme.id === "neo" ? "hover:bg-white/[0.10]" : "hover:bg-black/[0.03]")}
                   >
-                    <X className="h-5 w-5 text-white/75" />
+                    <X className={cn("h-5 w-5", theme.id === "neo" ? "text-white/75" : "text-gray-600")} />
                   </button>
                 </div>
 
                 <div className="mt-5 space-y-4">
-                  <div className={cn("rounded-[22px] p-4", GLASS_SOFT)}>
-                    <div className={cn("text-[13px] font-semibold", TEXT_SECONDARY)}>Objectif hydratation</div>
+                  {/* Theme selector */}
+                  <div className={cn("rounded-[22px] p-4", theme.cardSoft)}>
+                    <div className={cn("text-[13px] font-semibold", theme.textSecondary)}>Thème</div>
+                    <div className="mt-3 grid grid-cols-3 gap-2">
+                      {Object.values(THEMES).map((t) => (
+                        <button
+                          key={t.id}
+                          onClick={() => setThemeId(t.id)}
+                          className={cn(
+                            "rounded-2xl px-3 py-3 text-[12px] font-semibold transition border",
+                            t.id === themeId
+                              ? (theme.id === "neo" ? "border-white/20 bg-white/[0.10]" : "border-black/15 bg-black/[0.04]")
+                              : (theme.id === "neo" ? "border-white/10 bg-white/[0.06] hover:bg-white/[0.10]" : "border-black/10 bg-black/[0.02] hover:bg-black/[0.04]"),
+                            theme.textPrimary
+                          )}
+                        >
+                          {t.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className={cn("rounded-[22px] p-4", theme.cardSoft)}>
+                    <div className={cn("text-[13px] font-semibold", theme.textSecondary)}>Objectif hydratation</div>
                     <div className="mt-3 flex items-center gap-3">
                       <input
                         type="range"
@@ -1313,20 +1375,17 @@ export default function ZenhydratationApp() {
                         }}
                         className="w-full"
                       />
-                      <div className={cn("min-w-[52px] text-right text-[13px] font-semibold", TEXT_PRIMARY)}>
+                      <div className={cn("min-w-[52px] text-right text-[13px] font-semibold", theme.textPrimary)}>
                         {waterGoal}
                       </div>
                     </div>
-                    <div className={cn("mt-2 text-[12px]", TEXT_MUTED)}>verres par jour</div>
+                    <div className={cn("mt-2 text-[12px]", theme.textMuted)}>verres par jour</div>
                   </div>
 
-                  <div className={cn("rounded-[22px] p-4", GLASS_SOFT)}>
-                    <div className={cn("text-[13px] font-semibold", TEXT_SECONDARY)}>Fréquence pauses yeux</div>
+                  <div className={cn("rounded-[22px] p-4", theme.cardSoft)}>
+                    <div className={cn("text-[13px] font-semibold", theme.textSecondary)}>Fréquence pauses yeux</div>
                     <select
-                      className={cn(
-                        "mt-3 w-full rounded-2xl px-3 py-3 text-[13px] font-semibold",
-                        "bg-black/30 border border-white/10 text-white/85"
-                      )}
+                      className={cn("mt-3 w-full rounded-2xl px-3 py-3 text-[13px] font-semibold", theme.surfaceInput)}
                       value={eyeBreakInterval}
                       onChange={(e) => {
                         const v = Number(e.target.value);
@@ -1341,13 +1400,10 @@ export default function ZenhydratationApp() {
                     </select>
                   </div>
 
-                  <div className={cn("rounded-[22px] p-4", GLASS_SOFT)}>
-                    <div className={cn("text-[13px] font-semibold", TEXT_SECONDARY)}>Fréquence étirements</div>
+                  <div className={cn("rounded-[22px] p-4", theme.cardSoft)}>
+                    <div className={cn("text-[13px] font-semibold", theme.textSecondary)}>Fréquence étirements</div>
                     <select
-                      className={cn(
-                        "mt-3 w-full rounded-2xl px-3 py-3 text-[13px] font-semibold",
-                        "bg-black/30 border border-white/10 text-white/85"
-                      )}
+                      className={cn("mt-3 w-full rounded-2xl px-3 py-3 text-[13px] font-semibold", theme.surfaceInput)}
                       value={stretchInterval}
                       onChange={(e) => {
                         const v = Number(e.target.value);
@@ -1362,16 +1418,16 @@ export default function ZenhydratationApp() {
                     </select>
                   </div>
 
-                  <div className={cn("rounded-[22px] p-4 flex items-center justify-between", GLASS_SOFT)}>
+                  <div className={cn("rounded-[22px] p-4 flex items-center justify-between", theme.cardSoft)}>
                     <div>
-                      <div className={cn("text-[13px] font-semibold", TEXT_SECONDARY)}>Sons</div>
-                      <div className={cn("mt-1 text-[12px]", TEXT_MUTED)}>
-                        Fonctionne après une interaction utilisateur (règle navigateur).
+                      <div className={cn("text-[13px] font-semibold", theme.textSecondary)}>Sons</div>
+                      <div className={cn("mt-1 text-[12px]", theme.textMuted)}>
+                        Sur le web, les sons nécessitent une première interaction utilisateur.
                       </div>
                     </div>
                     <input
                       type="checkbox"
-                      className="h-5 w-5 accent-white"
+                      className="h-5 w-5 accent-black"
                       checked={soundEnabled}
                       onChange={(e) => {
                         setSoundEnabled(e.target.checked);
@@ -1385,10 +1441,12 @@ export default function ZenhydratationApp() {
                   onClick={() => setShowSettings(false)}
                   className={cn(
                     "mt-5 w-full rounded-2xl px-4 py-3 font-semibold text-[14px] transition",
-                    "border border-white/10 bg-gradient-to-b from-white/[0.12] to-white/[0.06] hover:from-white/[0.16] hover:to-white/[0.08]"
+                    theme.id === "neo"
+                      ? "border border-white/10 bg-gradient-to-b from-white/[0.12] to-white/[0.06] hover:from-white/[0.16] hover:to-white/[0.08]"
+                      : "border border-black/10 bg-black/[0.03] hover:bg-black/[0.05]"
                   )}
                 >
-                  <span className={TEXT_PRIMARY}>Fermer</span>
+                  <span className={theme.textPrimary}>Fermer</span>
                 </button>
               </div>
             </div>
@@ -1400,9 +1458,9 @@ export default function ZenhydratationApp() {
 }
 
 /* =========================
- * Shortcut tile (Neo Glass)
+ * Shortcut tile
  * ========================= */
-function ShortcutTile({ title, subtitle, icon, glow = "cyan", onClick }) {
+function ShortcutTile({ title, subtitle, icon, glow = "cyan", theme, onClick }) {
   const glowMap = {
     cyan: "bg-cyan-400/20",
     violet: "bg-violet-500/20",
@@ -1414,20 +1472,24 @@ function ShortcutTile({ title, subtitle, icon, glow = "cyan", onClick }) {
   return (
     <button
       onClick={onClick}
-      className="group w-full rounded-[24px] border border-white/10 bg-white/[0.07] shadow-[0_18px_45px_rgba(0,0,0,0.35)] backdrop-blur-2xl p-4 text-left hover:bg-white/[0.10] transition active:scale-[0.99]"
+      className={cn(
+        "group w-full rounded-[24px] p-4 text-left transition active:scale-[0.99]",
+        theme.card,
+        theme.id === "neo" ? "hover:bg-white/[0.10]" : "hover:bg-black/[0.03]"
+      )}
       type="button"
     >
       <div className="flex items-center gap-3">
         <div className="relative">
           <div className={cn("absolute inset-0 rounded-full blur-2xl", glowMap[glow] ?? glowMap.cyan)} />
-          <div className="h-11 w-11 rounded-2xl border border-white/10 bg-white/[0.06] backdrop-blur-xl flex items-center justify-center">
+          <div className={cn("h-11 w-11 rounded-2xl flex items-center justify-center", theme.cardSoft)}>
             {icon}
           </div>
         </div>
 
         <div className="min-w-0">
-          <div className="text-white/90 text-[16px] font-semibold leading-tight truncate">{title}</div>
-          <div className="mt-1 text-white/60 text-[13px] font-semibold leading-none truncate">{subtitle}</div>
+          <div className={cn("text-[16px] font-semibold leading-tight truncate", theme.textPrimary)}>{title}</div>
+          <div className={cn("mt-1 text-[13px] font-semibold leading-none truncate", theme.textMuted)}>{subtitle}</div>
         </div>
       </div>
     </button>
