@@ -208,7 +208,7 @@ export default function DealsPage({ theme, remoteUrl = DEFAULT_REMOTE_URL }) {
       </div>
 
       <div className={cn("text-[12px] leading-snug", theme.textMuted)}>
-        Conseil: hébergez le JSON (GitHub Pages, Vercel, Firebase, etc.) pour mettre à jour les deals sans republier l’app.
+        Conseil: .
       </div>
     </div>
   );
