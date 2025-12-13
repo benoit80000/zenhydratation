@@ -12,7 +12,10 @@ import {
   Pause,
   Check,
   Sun,
-  Moon
+  Moon,
+  ShoppingBag,
+  ExternalLink,
+  Search
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -28,14 +31,21 @@ import {
  * ==========================================================
  * ZenhydratationApp.jsx (Vercel-safe)
  * - 3 thèmes : neo (Neo Glass), classic, wellness
- * - Réglages via onglet Réglages (bottom nav) : pas de bouton settings en haut
+ * - Réglages via onglet Réglages (bottom nav)
  * - Offline: localStorage (historique 30j)
  * - Hydratation: ml (source de vérité), verres avec remplissage progressif
  * - Appui long sur un verre = annuler (retirer une dose)
  * - Bulles optionnelles
- * - Avatar homme/femme + énergie (fatigue) qui s’améliore avec hydratation + routines
- * - Home: 6 tuiles pleine largeur (même format que la tuile “Pause yeux”/Hero) empilées
- *   ordre: Énergie, Hydratation, Yeux, Étirements, Réveil, Coucher
+ * - Avatar homme/femme + énergie qui évolue avec hydratation + routines
+ *
+ * MAJ UI:
+ * - Suppression de la tuile "Hero" (Pause yeux / Étirements) en haut
+ * - Home: tuiles pleine largeur empilées
+ * - Ajout page "Bons Plans" après "Stats" (liste de bons plans Amazon via liens)
+ *
+ * NOTE:
+ * - Sans API Amazon (PA-API), on ne peut pas récupérer automatiquement les prix/stock.
+ * - Cette page utilise une liste statique de bons plans (modifiable dans le code).
  * ==========================================================
  */
 
@@ -471,6 +481,61 @@ export default function ZenhydratationApp() {
     return m;
   }, [exercises]);
 
+  // Bons plans (liste statique modifiable)
+  const deals = useMemo(
+    () => [
+      {
+        id: "deal-1",
+        title: "Gourde isotherme (500–750ml)",
+        category: "Hydratation",
+        desc: "Pratique pour atteindre votre objectif quotidien, chaude/froide.",
+        badge: "Indispensable",
+        url: "https://www.amazon.fr/s?k=gourde+isotherme+inox"
+      },
+      {
+        id: "deal-2",
+        title: "Bouteille graduée motivation",
+        category: "Hydratation",
+        desc: "Repères horaires pour boire régulièrement.",
+        badge: "Routine",
+        url: "https://www.amazon.fr/s?k=bouteille+gradu%C3%A9e+motivation"
+      },
+      {
+        id: "deal-3",
+        title: "Humidificateur d’air de bureau",
+        category: "Bien-être",
+        desc: "Confort respiratoire et sensation de peau moins sèche.",
+        badge: "Confort",
+        url: "https://www.amazon.fr/s?k=humidificateur+air+bureau"
+      },
+      {
+        id: "deal-4",
+        title: "Lunettes anti-lumière bleue",
+        category: "Yeux",
+        desc: "Pour réduire l’inconfort visuel selon votre usage.",
+        badge: "Yeux",
+        url: "https://www.amazon.fr/s?k=lunettes+anti+lumi%C3%A8re+bleue"
+      },
+      {
+        id: "deal-5",
+        title: "Repose-poignets / tapis de souris ergonomique",
+        category: "Ergonomie",
+        desc: "Pour améliorer le confort au poste de travail.",
+        badge: "Ergo",
+        url: "https://www.amazon.fr/s?k=repose+poignets+ergonomique"
+      },
+      {
+        id: "deal-6",
+        title: "Tapis d’étirement / yoga",
+        category: "Étirements",
+        desc: "Idéal pour intégrer 2 minutes de mobilité.",
+        badge: "Mobilité",
+        url: "https://www.amazon.fr/s?k=tapis+yoga"
+      }
+    ],
+    []
+  );
+
   /* =========================
    * Load
    * ========================= */
@@ -698,18 +763,6 @@ export default function ZenhydratationApp() {
     todayStats.sleepRoutines
   ]);
 
-  const nextHero = useMemo(() => {
-    const eyeSooner = eyeBreakTimer <= stretchTimer;
-    const type = eyeSooner ? "eye" : "stretch";
-    const label = type === "eye" ? "Pause yeux" : "Étirements";
-    const time = type === "eye" ? formatTime(eyeBreakTimer) : formatTime(stretchTimer);
-    const pct =
-      type === "eye"
-        ? ((eyeBreakInterval - eyeBreakTimer) / eyeBreakInterval) * 100
-        : ((stretchInterval - stretchTimer) / stretchInterval) * 100;
-    return { type, label, time, pct: Math.max(0, Math.min(100, pct)) };
-  }, [eyeBreakTimer, stretchTimer, eyeBreakInterval, stretchInterval]);
-
   const themeGlow = (type) => {
     switch (type) {
       case "eye":
@@ -864,8 +917,6 @@ export default function ZenhydratationApp() {
    * Screens
    * ========================= */
   const HomeScreen = () => {
-    const heroTheme = themeGlow(nextHero.type);
-
     return (
       <div className="p-6">
         <div className="flex items-center justify-between mb-4">
@@ -896,7 +947,7 @@ export default function ZenhydratationApp() {
           </button>
         </div>
 
-        {/* 6 tuiles pleine largeur (même format que le Hero) */}
+        {/* Tuiles pleine largeur empilées */}
         <div className="mt-6 space-y-4">
           {/* 1) Énergie */}
           <div className={cn("rounded-[28px] p-6", theme.card)}>
@@ -978,21 +1029,7 @@ export default function ZenhydratationApp() {
             </button>
           </div>
 
-          {/* 3) Yeux */}
-          <LargeActionTile
-            theme={theme}
-            title="Yeux"
-            subtitle={`Prochaine pause dans ${formatTime(eyeBreakTimer)}`}
-            glow="violet"
-            icon={
-              theme.id === "neo"
-                ? <Eye className="h-6 w-6 text-white/85" />
-                : <Eye className="h-6 w-6 text-violet-600" />
-            }
-            onClick={() => setShowExercise("eye")}
-          />
-
-          {/* 4) Étirements */}
+          {/* 3) Étirements */}
           <LargeActionTile
             theme={theme}
             title="Étirements"
@@ -1006,7 +1043,7 @@ export default function ZenhydratationApp() {
             onClick={() => setShowExercise("stretch")}
           />
 
-          {/* 5) Réveil */}
+          {/* 4) Réveil */}
           <LargeActionTile
             theme={theme}
             title="Réveil"
@@ -1020,7 +1057,7 @@ export default function ZenhydratationApp() {
             onClick={() => startQueue("wake", exercises.wake)}
           />
 
-          {/* 6) Coucher */}
+          {/* 5) Coucher */}
           <LargeActionTile
             theme={theme}
             title="Coucher"
@@ -1033,6 +1070,9 @@ export default function ZenhydratationApp() {
             }
             onClick={() => startQueue("sleep", exercises.sleep)}
           />
+
+          {/* (Optionnel) Accès rapide Yeux via notif seulement ou menu exercice :
+              Si vous voulez une tuile Yeux aussi, dites-le et je la réintègre ici. */}
         </div>
 
         <div className={cn("mt-7 text-[14px] leading-snug", theme.textMuted)}>
@@ -1195,6 +1235,130 @@ export default function ZenhydratationApp() {
     );
   };
 
+  const DealsScreen = () => {
+    const [q, setQ] = useState("");
+    const [cat, setCat] = useState("Tous");
+
+    const categories = useMemo(() => {
+      const set = new Set(deals.map((d) => d.category));
+      return ["Tous", ...Array.from(set)];
+    }, [deals]);
+
+    const filtered = useMemo(() => {
+      const needle = q.trim().toLowerCase();
+      return deals.filter((d) => {
+        const okCat = cat === "Tous" ? true : d.category === cat;
+        const okQ = needle.length === 0
+          ? true
+          : `${d.title} ${d.desc} ${d.badge} ${d.category}`.toLowerCase().includes(needle);
+        return okCat && okQ;
+      });
+    }, [deals, q, cat]);
+
+    return (
+      <div className="px-5 pb-24 pt-6 space-y-6">
+        <div className="flex items-end justify-between">
+          <div className={cn("text-[28px] font-semibold", theme.textPrimary)}>Bons Plans</div>
+          <div className={cn("rounded-2xl px-4 py-2 flex items-center gap-2", theme.cardSoft)}>
+            <ShoppingBag className={cn("h-4 w-4", theme.id === "neo" ? "text-white/80" : "text-gray-700")} />
+            <span className={cn("text-[13px] font-semibold", theme.textSecondary)}>{filtered.length}</span>
+          </div>
+        </div>
+
+        <div className={cn("rounded-[28px] p-5", theme.card)}>
+          <div className={cn("text-[13px] font-semibold", theme.textMuted)}>
+            Sélection manuelle de produits. Les liens ouvrent une recherche Amazon (vous pouvez remplacer par des liens directs).
+          </div>
+
+          <div className="mt-4 grid grid-cols-1 gap-3">
+            <div className={cn("rounded-2xl px-3 py-3 flex items-center gap-2", theme.cardSoft)}>
+              <Search className={cn("h-4 w-4", theme.id === "neo" ? "text-white/75" : "text-gray-600")} />
+              <input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Rechercher un produit…"
+                className={cn(
+                  "w-full bg-transparent outline-none text-[13px] font-semibold",
+                  theme.id === "neo" ? "text-white/85 placeholder:text-white/40" : "text-gray-800 placeholder:text-gray-400"
+                )}
+              />
+            </div>
+
+            <select
+              value={cat}
+              onChange={(e) => setCat(e.target.value)}
+              className={cn("w-full rounded-2xl px-3 py-3 text-[13px] font-semibold", theme.surfaceInput)}
+            >
+              {categories.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          {filtered.map((d) => (
+            <div key={d.id} className={cn("rounded-[28px] p-6", theme.card)}>
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <div className={cn("text-[18px] font-semibold", theme.textPrimary)}>{d.title}</div>
+                  <div className={cn("mt-2 text-[13px] leading-snug", theme.textSecondary)}>{d.desc}</div>
+
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <span
+                      className={cn(
+                        "px-3 py-1 rounded-full text-[12px] font-semibold",
+                        theme.id === "neo" ? "bg-white/10 border border-white/10 text-white/75" : "bg-black/[0.03] border border-black/10 text-gray-700"
+                      )}
+                    >
+                      {d.category}
+                    </span>
+                    <span
+                      className={cn(
+                        "px-3 py-1 rounded-full text-[12px] font-semibold",
+                        theme.id === "neo" ? "bg-white/10 border border-white/10 text-white/75" : "bg-black/[0.03] border border-black/10 text-gray-700"
+                      )}
+                    >
+                      {d.badge}
+                    </span>
+                  </div>
+                </div>
+
+                <a
+                  href={d.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className={cn(
+                    "shrink-0 rounded-2xl px-4 py-3 font-semibold text-[13px] transition inline-flex items-center gap-2",
+                    theme.cardSoft,
+                    theme.id === "neo" ? "hover:bg-white/[0.10]" : "hover:bg-black/[0.03]",
+                    theme.textPrimary
+                  )}
+                  title="Ouvrir sur Amazon"
+                >
+                  Ouvrir
+                  <ExternalLink className="h-4 w-4" />
+                </a>
+              </div>
+            </div>
+          ))}
+
+          {filtered.length === 0 && (
+            <div className={cn("rounded-[28px] p-6", theme.card)}>
+              <div className={cn("text-[14px] font-semibold", theme.textSecondary)}>
+                Aucun bon plan ne correspond à votre recherche.
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className={cn("text-[12px] leading-snug", theme.textMuted)}>
+          Astuce: si vous avez un compte Partenaires Amazon, vous pouvez remplacer les URL par vos liens affiliés.
+        </div>
+      </div>
+    );
+  };
+
   /* =========================
    * Exercise selection modal
    * ========================= */
@@ -1270,12 +1434,10 @@ export default function ZenhydratationApp() {
                       <div className={cn("text-[15px] font-semibold truncate", theme.textPrimary)}>{ex.name}</div>
                       <div className={cn("mt-1 text-[13px] leading-snug", theme.textMuted)}>{ex.desc}</div>
                     </div>
-                    <div
-                      className={cn(
-                        "shrink-0 rounded-full px-3 py-1 text-[12px] font-semibold",
-                        theme.id === "neo" ? "bg-white/10 border border-white/10" : "bg-black/[0.03] border border-black/10"
-                      )}
-                    >
+                    <div className={cn(
+                      "shrink-0 rounded-full px-3 py-1 text-[12px] font-semibold",
+                      theme.id === "neo" ? "bg-white/10 border border-white/10" : "bg-black/[0.03] border border-black/10"
+                    )}>
                       <span className={theme.textSecondary}>{ex.durationSec}s</span>
                     </div>
                   </div>
@@ -1673,6 +1835,7 @@ export default function ZenhydratationApp() {
 
         {activeTab === "home" && <HomeScreen />}
         {activeTab === "stats" && <StatsScreen />}
+        {activeTab === "deals" && <DealsScreen />}
 
         {/* Bottom nav */}
         <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto px-5 pb-5">
@@ -1697,6 +1860,17 @@ export default function ZenhydratationApp() {
             >
               <TrendingUp className="h-6 w-6" />
               <span className="text-[11px] font-semibold">Stats</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab("deals")}
+              className={cn(
+                "flex flex-col items-center gap-1 transition",
+                activeTab === "deals" ? theme.textPrimary : theme.textMuted
+              )}
+            >
+              <ShoppingBag className="h-6 w-6" />
+              <span className="text-[11px] font-semibold">Bons Plans</span>
             </button>
 
             <button
@@ -1733,7 +1907,7 @@ export default function ZenhydratationApp() {
 }
 
 /* =========================
- * Large action tile (même format que le Hero)
+ * Large action tile (format Hero)
  * ========================= */
 function LargeActionTile({ theme, title, subtitle, icon, glow = "cyan", onClick }) {
   const glowMap = {
@@ -1772,17 +1946,17 @@ function LargeActionTile({ theme, title, subtitle, icon, glow = "cyan", onClick 
 }
 
 /* =========================
- * Avatar mood (emoji homme/femme + état qui évolue)
+ * Avatar mood (emoji homme/femme + état)
  * ========================= */
 function AvatarMood({ theme, avatar, energyScore }) {
   const person = avatar === "male" ? "👨" : "👩";
 
   const mood =
     energyScore < 35
-      ? { key: "tired", label: "Fatigué", emoji: "😴", aura: "bg-rose-500/15" }
+      ? { label: "Fatigué", emoji: "😴", aura: "bg-rose-500/15" }
       : energyScore < 70
-        ? { key: "ok", label: "En amélioration", emoji: "🙂", aura: "bg-amber-500/15" }
-        : { key: "good", label: "En forme", emoji: "😄", aura: "bg-emerald-500/15" };
+        ? { label: "En amélioration", emoji: "🙂", aura: "bg-amber-500/15" }
+        : { label: "En forme", emoji: "😄", aura: "bg-emerald-500/15" };
 
   const genderLabel = avatar === "male" ? "Homme" : "Femme";
 
@@ -1790,10 +1964,7 @@ function AvatarMood({ theme, avatar, energyScore }) {
     <div className="relative">
       <div className={cn("absolute inset-0 rounded-full blur-2xl", mood.aura)} />
       <div
-        className={cn(
-          "h-20 w-20 rounded-[26px] flex flex-col items-center justify-center",
-          theme.cardSoft
-        )}
+        className={cn("h-20 w-20 rounded-[26px] flex flex-col items-center justify-center", theme.cardSoft)}
         aria-label={`Avatar ${genderLabel}, ${mood.label}`}
         title={`${genderLabel} • ${mood.label}`}
       >
@@ -1908,22 +2079,18 @@ function WaterGlasses({
               title="Clic: +dose — Appui long: annuler"
             >
               <div className={cn("relative w-full h-full rounded-2xl border overflow-hidden", glassBg)}>
-                {/* highlight */}
                 <div className="absolute inset-0 pointer-events-none">
                   <div className="absolute left-1 top-2 bottom-2 w-[22%] rounded-full bg-white/10" />
                 </div>
 
-                {/* rim */}
                 <div className={cn("absolute top-0 left-0 right-0 h-[10%] opacity-60", rim)} />
 
-                {/* water fill */}
                 <div
                   className="absolute left-0 right-0 bottom-0 transition-[height] duration-700 ease-out"
                   style={{ height: `${fillPct * 100}%` }}
                 >
                   <div className={cn("absolute inset-0 bg-gradient-to-b", fillColor)} />
 
-                  {/* wave overlays */}
                   <div className="absolute inset-0 overflow-hidden">
                     <div
                       className={cn(
@@ -1941,7 +2108,6 @@ function WaterGlasses({
                     />
                   </div>
 
-                  {/* bubbles */}
                   {bubblesEnabled && (isFull || isPartial) && (
                     <div className="absolute inset-0 pointer-events-none">
                       <Bubble x="22%" delay="0s" />
@@ -1951,7 +2117,6 @@ function WaterGlasses({
                   )}
                 </div>
 
-                {/* hint */}
                 <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                   <span
                     className={cn(
