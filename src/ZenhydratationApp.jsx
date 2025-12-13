@@ -869,7 +869,7 @@ export default function ZenhydratationApp() {
 
         {/* Shortcuts */}
         <div className="mt-7">
-          <div className={cn("text-[28px] font-semibold", theme.textPrimary)}>Raccourcis</div>
+          <div className={cn("text-[28px] font-semibold", theme.textPrimary)}>Exercices</div>
 
           <div className="mt-5 grid grid-cols-2 gap-4">
             <ShortcutTile
