@@ -28,8 +28,8 @@ import {
  * (Vercel OK / offline OK)
  * =========================
  */
-const STORAGE_STATE_KEY = "zenhydratation_state_v1";
-const STORAGE_HISTORY_KEY = "zenhydratation_history_v1";
+const STORAGE_STATE_KEY = "zenhydratation_state_v2";
+const STORAGE_HISTORY_KEY = "zenhydratation_history_v2";
 
 function safeParse(json, fallback) {
   try {
@@ -117,21 +117,25 @@ export default function ZenhydratationApp() {
   const [showExercise, setShowExercise] = useState(null); // "eye" | "stretch" | null
   const [showSettings, setShowSettings] = useState(false);
 
-  // Session d'exercices réelle
-  // { type: "eye"|"stretch", index: number, remaining: number }
+  // Exercice actif (1 exercice sélectionné)
+  // { type: "eye"|"stretch", exId, name, desc, durationSec, remaining }
   const [activeExercise, setActiveExercise] = useState(null);
 
   // Historique & streak (zéro fictif)
   const [history, setHistory] = useState([]);
   const [streak, setStreak] = useState(0);
 
-  // Stats du jour (zéro fictif)
+  // Stats du jour (zéro fictif) + détails par exercice
   const [todayStats, setTodayStats] = useState({
     dayKey: dayKey(),
     water: 0,
     eyeBreaks: 0,
     stretches: 0,
-    workTime: 0
+    workTime: 0,
+    details: {
+      eye: {}, // { "eye-2020": 2, ... }
+      stretch: {} // { "st-neck": 1, ... }
+    }
   });
 
   const saveDebounceRef = useRef(null);
@@ -140,19 +144,37 @@ export default function ZenhydratationApp() {
   const exercises = useMemo(
     () => ({
       stretch: [
-        { name: "Rotation du cou", durationSec: 30, desc: "Tournez lentement la tête de gauche à droite" },
-        { name: "Étirement des épaules", durationSec: 30, desc: "Roulez vos épaules en arrière puis en avant" },
-        { name: "Étirement des bras", durationSec: 30, desc: "Tendez les bras devant vous, entrelacez les doigts" },
-        { name: "Flexion du dos", durationSec: 30, desc: "Debout, penchez-vous vers l'avant doucement" }
+        { id: "st-neck", name: "Rotation du cou", durationSec: 30, desc: "Tournez lentement la tête de gauche à droite" },
+        { id: "st-shoulders", name: "Étirement des épaules", durationSec: 30, desc: "Roulez vos épaules en arrière puis en avant" },
+        { id: "st-arms", name: "Étirement des bras", durationSec: 30, desc: "Tendez les bras devant vous, entrelacez les doigts" },
+        { id: "st-back", name: "Flexion du dos", durationSec: 30, desc: "Debout, penchez-vous vers l'avant doucement" }
       ],
       eye: [
-        { name: "Règle 20-20-20", durationSec: 20, desc: "Regardez un objet à 6 mètres pendant 20 secondes" },
-        { name: "Clignements", durationSec: 20, desc: "Clignez des yeux 10 fois lentement" },
-        { name: "Massage des yeux", durationSec: 20, desc: "Fermez les yeux et massez doucement les tempes" }
+        { id: "eye-2020", name: "Règle 20-20-20", durationSec: 20, desc: "Regardez un objet à 6 mètres pendant 20 secondes" },
+        { id: "eye-blink", name: "Clignements", durationSec: 20, desc: "Clignez des yeux 10 fois lentement" },
+        { id: "eye-massage", name: "Massage des yeux", durationSec: 20, desc: "Fermez les yeux et massez doucement les tempes" }
       ]
     }),
     []
   );
+
+  const exerciseLabelById = useMemo(() => {
+    const map = {};
+    for (const ex of exercises.eye) map[ex.id] = ex.name;
+    for (const ex of exercises.stretch) map[ex.id] = ex.name;
+    return map;
+  }, [exercises]);
+
+  const startExercise = (type, ex) => {
+    setActiveExercise({
+      type,
+      exId: ex.id,
+      name: ex.name,
+      desc: ex.desc,
+      durationSec: ex.durationSec,
+      remaining: ex.durationSec
+    });
+  };
 
   /**
    * =========================
@@ -182,7 +204,11 @@ export default function ZenhydratationApp() {
         water: clampInt(s.todayStats.water ?? 0, 0, 500),
         eyeBreaks: clampInt(s.todayStats.eyeBreaks ?? 0, 0, 500),
         stretches: clampInt(s.todayStats.stretches ?? 0, 0, 500),
-        workTime: clampInt(s.todayStats.workTime ?? 0, 0, 24 * 3600)
+        workTime: clampInt(s.todayStats.workTime ?? 0, 0, 24 * 3600),
+        details: {
+          eye: (s.todayStats.details?.eye && typeof s.todayStats.details.eye === "object") ? s.todayStats.details.eye : {},
+          stretch: (s.todayStats.details?.stretch && typeof s.todayStats.details.stretch === "object") ? s.todayStats.details.stretch : {}
+        }
       });
       setWaterCount(clampInt(s.waterCount ?? 0, 0, 200));
       setEyeBreakTimer(clampInt(s.eyeBreakTimer ?? 1200, 1, 7200));
@@ -190,7 +216,14 @@ export default function ZenhydratationApp() {
       setIsPaused(!!s.isPaused);
     } else {
       // nouveau jour : timers reset aux intervalles
-      setTodayStats({ dayKey: current, water: 0, eyeBreaks: 0, stretches: 0, workTime: 0 });
+      setTodayStats({
+        dayKey: current,
+        water: 0,
+        eyeBreaks: 0,
+        stretches: 0,
+        workTime: 0,
+        details: { eye: {}, stretch: {} }
+      });
       setWaterCount(0);
       setEyeBreakTimer(s.eyeBreakInterval ?? 1200);
       setStretchTimer(s.stretchInterval ?? 3600);
@@ -265,7 +298,14 @@ export default function ZenhydratationApp() {
       const current = dayKey();
       if (lastDayRef.current !== current) {
         lastDayRef.current = current;
-        setTodayStats({ dayKey: current, water: 0, eyeBreaks: 0, stretches: 0, workTime: 0 });
+        setTodayStats({
+          dayKey: current,
+          water: 0,
+          eyeBreaks: 0,
+          stretches: 0,
+          workTime: 0,
+          details: { eye: {}, stretch: {} }
+        });
         setWaterCount(0);
         setEyeBreakTimer(eyeBreakInterval);
         setStretchTimer(stretchInterval);
@@ -340,7 +380,7 @@ export default function ZenhydratationApp() {
 
   /**
    * =========================
-   * Exercise runner (real)
+   * Exercise runner (selected exercise)
    * =========================
    */
   useEffect(() => {
@@ -349,29 +389,36 @@ export default function ZenhydratationApp() {
     const id = setInterval(() => {
       setActiveExercise((prev) => {
         if (!prev) return null;
+
         if (prev.remaining <= 1) {
-          const list = exercises[prev.type];
-          const nextIndex = prev.index + 1;
+          // Fin => incrément total + détail par exercice
+          setTodayStats((s) => {
+            const group = prev.type === "eye" ? "eye" : "stretch";
+            const totalKey = prev.type === "eye" ? "eyeBreaks" : "stretches";
+            const currentCount = ((s.details?.[group]?.[prev.exId] ?? 0) + 1);
 
-          if (nextIndex < list.length) {
-            return { type: prev.type, index: nextIndex, remaining: list[nextIndex].durationSec };
-          }
-
-          // Finished => credit ONE session (not per exercise)
-          if (prev.type === "eye") {
-            setTodayStats((s) => ({ ...s, eyeBreaks: s.eyeBreaks + 1 }));
-          } else {
-            setTodayStats((s) => ({ ...s, stretches: s.stretches + 1 }));
-          }
+            return {
+              ...s,
+              [totalKey]: s[totalKey] + 1,
+              details: {
+                ...(s.details ?? { eye: {}, stretch: {} }),
+                [group]: {
+                  ...((s.details ?? { eye: {}, stretch: {} })[group] ?? {}),
+                  [prev.exId]: currentCount
+                }
+              }
+            };
+          });
 
           return null;
         }
+
         return { ...prev, remaining: prev.remaining - 1 };
       });
     }, 1000);
 
     return () => clearInterval(id);
-  }, [activeExercise, exercises]);
+  }, [activeExercise]);
 
   /**
    * =========================
@@ -386,11 +433,13 @@ export default function ZenhydratationApp() {
   };
 
   const completeEyeBreak = () => {
+    // Notif in-app => on crédite une "pause yeux" (sans détail, car pas un exercice choisi)
     setTodayStats((s) => ({ ...s, eyeBreaks: s.eyeBreaks + 1 }));
     setShowNotif(null);
   };
 
   const completeStretch = () => {
+    // Notif in-app => on crédite un "étirement" (sans détail, car pas un exercice choisi)
     setTodayStats((s) => ({ ...s, stretches: s.stretches + 1 }));
     setShowNotif(null);
   };
@@ -521,6 +570,7 @@ export default function ZenhydratationApp() {
               style={{ width: `${((eyeBreakInterval - eyeBreakTimer) / eyeBreakInterval) * 100}%` }}
             />
           </div>
+          <p className="mt-3 text-xs opacity-90">Choisir un exercice</p>
         </button>
 
         <button
@@ -536,6 +586,7 @@ export default function ZenhydratationApp() {
               style={{ width: `${((stretchInterval - stretchTimer) / stretchInterval) * 100}%` }}
             />
           </div>
+          <p className="mt-3 text-xs opacity-90">Choisir un exercice</p>
         </button>
       </div>
 
@@ -566,6 +617,45 @@ export default function ZenhydratationApp() {
           <Clock size={28} className="mb-3" />
           <p className="text-sm opacity-90 mb-1">Temps de travail aujourd'hui</p>
           <p className="text-3xl font-bold">{workH}h {workM}m</p>
+        </div>
+
+        {/* DETAIL TODAY */}
+        <div className={`${darkMode ? "bg-gray-800 border-gray-700" : "bg-white border-gray-100"} rounded-2xl p-5 shadow-md border`}>
+          <h3 className={`font-semibold mb-4 ${darkMode ? "text-gray-100" : "text-gray-800"}`}>Détail des exercices (aujourd’hui)</h3>
+
+          <div className="space-y-4">
+            <div>
+              <p className={`${darkMode ? "text-gray-300" : "text-gray-600"} text-sm font-semibold mb-2`}>Yeux</p>
+              {Object.keys(todayStats.details?.eye ?? {}).length === 0 ? (
+                <p className={`${darkMode ? "text-gray-300" : "text-gray-600"} text-sm`}>Aucun exercice yeux effectué.</p>
+              ) : (
+                <div className="space-y-2">
+                  {Object.entries(todayStats.details.eye).map(([id, count]) => (
+                    <div key={id} className="flex justify-between text-sm">
+                      <span className={darkMode ? "text-gray-200" : "text-gray-800"}>{exerciseLabelById[id] ?? id}</span>
+                      <span className={darkMode ? "text-gray-200" : "text-gray-800"}>{count}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div>
+              <p className={`${darkMode ? "text-gray-300" : "text-gray-600"} text-sm font-semibold mb-2`}>Étirements</p>
+              {Object.keys(todayStats.details?.stretch ?? {}).length === 0 ? (
+                <p className={`${darkMode ? "text-gray-300" : "text-gray-600"} text-sm`}>Aucun exercice d’étirement effectué.</p>
+              ) : (
+                <div className="space-y-2">
+                  {Object.entries(todayStats.details.stretch).map(([id, count]) => (
+                    <div key={id} className="flex justify-between text-sm">
+                      <span className={darkMode ? "text-gray-200" : "text-gray-800"}>{exerciseLabelById[id] ?? id}</span>
+                      <span className={darkMode ? "text-gray-200" : "text-gray-800"}>{count}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
         <div className={`${darkMode ? "bg-gray-800 border-gray-700" : "bg-white border-gray-100"} rounded-2xl p-5 shadow-md border`}>
@@ -658,7 +748,7 @@ export default function ZenhydratationApp() {
         />
       )}
 
-      {/* Exercise list modal */}
+      {/* Exercise list modal (CLICK TO START) */}
       {showExercise && (
         <div className="fixed inset-0 bg-black/50 flex items-end z-50" onClick={() => setShowExercise(null)}>
           <div
@@ -675,8 +765,15 @@ export default function ZenhydratationApp() {
             </div>
 
             <div className="space-y-3">
-              {exercises[showExercise].map((exercise, i) => (
-                <div key={i} className={`${darkMode ? "bg-gray-800 border-gray-700" : "bg-gray-50 border-gray-100"} rounded-xl p-4 border`}>
+              {exercises[showExercise].map((exercise) => (
+                <button
+                  key={exercise.id}
+                  onClick={() => {
+                    startExercise(showExercise, exercise);
+                    setShowExercise(null);
+                  }}
+                  className={`${darkMode ? "bg-gray-800 border-gray-700" : "bg-gray-50 border-gray-100"} w-full text-left rounded-xl p-4 border hover:scale-[1.01] transition`}
+                >
                   <div className="flex items-start justify-between mb-2">
                     <h4 className="font-semibold">{exercise.name}</h4>
                     <span className="text-xs bg-blue-100 text-blue-600 px-2 py-1 rounded-full">
@@ -684,73 +781,30 @@ export default function ZenhydratationApp() {
                     </span>
                   </div>
                   <p className={darkMode ? "text-gray-300 text-sm" : "text-gray-600 text-sm"}>{exercise.desc}</p>
-                </div>
+                  <p className="mt-2 text-xs text-blue-600 font-semibold">Démarrer</p>
+                </button>
               ))}
             </div>
-
-            <button
-              onClick={() => {
-                const list = exercises[showExercise];
-                setActiveExercise({ type: showExercise, index: 0, remaining: list[0].durationSec });
-                setShowExercise(null);
-              }}
-              className={`w-full mt-4 py-3 rounded-xl font-semibold text-white ${
-                showExercise === "eye" ? "bg-purple-500 hover:bg-purple-600" : "bg-green-500 hover:bg-green-600"
-              } transition-colors`}
-            >
-              Commencer
-            </button>
           </div>
         </div>
       )}
 
-      {/* Active exercise fullscreen */}
+      {/* Active exercise fullscreen (same animation for all) */}
       {activeExercise && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl p-6 w-80 text-center space-y-4">
-            <h2 className="text-xl font-bold">
-              {exercises[activeExercise.type][activeExercise.index].name}
-            </h2>
-            <p className="text-gray-600">
-              {exercises[activeExercise.type][activeExercise.index].desc}
-            </p>
+            <h2 className="text-xl font-bold">{activeExercise.name}</h2>
+            <p className="text-gray-600">{activeExercise.desc}</p>
             <div className="text-5xl font-bold text-blue-600">
               {activeExercise.remaining}s
             </div>
 
-            <div className="flex gap-2">
-              <button
-                onClick={() => setActiveExercise(null)}
-                className="flex-1 py-2 rounded-lg bg-gray-200 text-gray-800 font-semibold"
-              >
-                Arrêter
-              </button>
-
-              <button
-                onClick={() => {
-                  const list = exercises[activeExercise.type];
-                  const nextIndex = activeExercise.index + 1;
-                  if (nextIndex < list.length) {
-                    setActiveExercise({
-                      type: activeExercise.type,
-                      index: nextIndex,
-                      remaining: list[nextIndex].durationSec
-                    });
-                  } else {
-                    // finish
-                    if (activeExercise.type === "eye") {
-                      setTodayStats((s) => ({ ...s, eyeBreaks: s.eyeBreaks + 1 }));
-                    } else {
-                      setTodayStats((s) => ({ ...s, stretches: s.stretches + 1 }));
-                    }
-                    setActiveExercise(null);
-                  }
-                }}
-                className="flex-1 py-2 rounded-lg bg-blue-600 text-white font-semibold"
-              >
-                Suivant
-              </button>
-            </div>
+            <button
+              onClick={() => setActiveExercise(null)}
+              className="w-full py-2 rounded-lg bg-gray-200 text-gray-800 font-semibold"
+            >
+              Arrêter
+            </button>
           </div>
         </div>
       )}
@@ -861,7 +915,7 @@ export default function ZenhydratationApp() {
           <button
             onClick={() => setActiveTab("home")}
             className={`flex flex-col items-center gap-1 transition-colors ${
-              activeTab === "home" ? "text-blue-600" : darkMode ? "text-gray-400" : "text-gray-400"
+              activeTab === "home" ? "text-blue-600" : "text-gray-400"
             }`}
           >
             <Home size={24} />
@@ -871,7 +925,7 @@ export default function ZenhydratationApp() {
           <button
             onClick={() => setActiveTab("stats")}
             className={`flex flex-col items-center gap-1 transition-colors ${
-              activeTab === "stats" ? "text-blue-600" : darkMode ? "text-gray-400" : "text-gray-400"
+              activeTab === "stats" ? "text-blue-600" : "text-gray-400"
             }`}
           >
             <TrendingUp size={24} />
