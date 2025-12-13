@@ -25,13 +25,22 @@ import {
 } from "recharts";
 
 /**
- * =========================
- * Web-safe offline storage
- * (Vercel OK / offline OK)
- * =========================
+ * ==========================================================
+ * ZenhydratationApp.jsx (Neo Glass)
+ * - Web-first (Vercel OK), offline via localStorage
+ * - No Capacitor imports (Android later)
+ * - 4 modules: Hydratation, Yeux, Étirements, Réveil, Coucher
+ * - Click an exercise => full-screen player (ring + timer)
+ * - Real stats (no fake), history 7/30 days + streak auto
+ * - Sound via WebAudio (works after a first user interaction)
+ * ==========================================================
  */
-const STORAGE_STATE_KEY = "zenhydratation_state_v2";
-const STORAGE_HISTORY_KEY = "zenhydratation_history_v2";
+
+/* =========================
+ * Storage
+ * ========================= */
+const STORAGE_STATE_KEY = "zenhydratation_state_v3";
+const STORAGE_HISTORY_KEY = "zenhydratation_history_v3";
 
 function safeParse(json, fallback) {
   try {
@@ -53,16 +62,14 @@ function writeLS(key, value) {
   window.localStorage.setItem(key, JSON.stringify(value));
 }
 
-/**
- * =========================
+/* =========================
  * Date helpers
- * =========================
- */
+ * ========================= */
 function dayKey(d = new Date()) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`; // YYYY-MM-DD
+  return `${y}-${m}-${day}`;
 }
 
 function addDays(d, delta) {
@@ -83,7 +90,6 @@ function computeStreak(history, today = new Date()) {
   const map = new Map(history.map((e) => [e.dayKey, e]));
   let streak = 0;
   let cursor = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-
   while (true) {
     const dk = dayKey(cursor);
     const e = map.get(dk);
@@ -100,40 +106,148 @@ function clampInt(n, min, max) {
   return Math.min(max, Math.max(min, Math.floor(v)));
 }
 
-/**
- * =========================
+/* =========================
+ * WebAudio (sound)
+ * ========================= */
+function playTone({ freq = 740, durationMs = 180, gain = 0.03 } = {}) {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = "sine";
+    o.frequency.value = freq;
+    g.gain.value = gain;
+    o.connect(g);
+    g.connect(ctx.destination);
+    o.start();
+    setTimeout(() => {
+      o.stop();
+      ctx.close();
+    }, durationMs);
+  } catch {
+    // ignore
+  }
+}
+
+/* =========================
+ * Neo Glass UI helpers
+ * ========================= */
+function cn(...xs) {
+  return xs.filter(Boolean).join(" ");
+}
+
+const GLASS =
+  "border border-white/10 bg-white/[0.07] shadow-[0_18px_50px_rgba(0,0,0,0.35)] backdrop-blur-2xl";
+const GLASS_SOFT =
+  "border border-white/10 bg-white/[0.06] shadow-[0_18px_45px_rgba(0,0,0,0.30)] backdrop-blur-2xl";
+const TEXT_PRIMARY = "text-white/90";
+const TEXT_SECONDARY = "text-white/65";
+const TEXT_MUTED = "text-white/50";
+
+function ProgressRing({ pct, size = 56, stroke = 7, glowClass = "text-cyan-300" }) {
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  const clamped = Math.max(0, Math.min(100, pct));
+  const offset = c - (clamped / 100) * c;
+
+  return (
+    <div className="relative" style={{ width: size, height: size }}>
+      <svg width={size} height={size} className="rotate-[-90deg]">
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          stroke="rgba(255,255,255,0.14)"
+          strokeWidth={stroke}
+          fill="transparent"
+        />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          stroke="currentColor"
+          className={cn(glowClass)}
+          strokeWidth={stroke}
+          fill="transparent"
+          strokeDasharray={c}
+          strokeDashoffset={offset}
+          strokeLinecap="round"
+        />
+      </svg>
+      <div className="absolute inset-0 rounded-full blur-2xl opacity-40 pointer-events-none">
+        <div className={cn("absolute inset-0 rounded-full", glowClass.replace("text-", "bg-") + "/20")} />
+      </div>
+    </div>
+  );
+}
+
+function GlassIconPlate({ children, glow = "cyan" }) {
+  const glowMap = {
+    cyan: "bg-cyan-400/20",
+    violet: "bg-violet-500/20",
+    emerald: "bg-emerald-500/20",
+    amber: "bg-amber-500/20",
+    indigo: "bg-indigo-500/20"
+  };
+  return (
+    <div className="relative">
+      <div className={cn("absolute inset-0 rounded-full blur-2xl", glowMap[glow] ?? glowMap.cyan)} />
+      <div className={cn("h-11 w-11 rounded-2xl flex items-center justify-center", GLASS_SOFT)}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function GlassButton({ children, onClick, className, title, type = "button" }) {
+  return (
+    <button
+      type={type}
+      onClick={onClick}
+      title={title}
+      className={cn(
+        "rounded-2xl px-4 py-3 transition hover:bg-white/[0.10] active:scale-[0.99]",
+        GLASS_SOFT,
+        className
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+/* =========================
  * Component
- * =========================
- */
+ * ========================= */
 export default function ZenhydratationApp() {
   const [activeTab, setActiveTab] = useState("home");
 
-  // Settings (réels, modifiables)
+  // settings
   const [waterGoal, setWaterGoal] = useState(8);
-  const [eyeBreakInterval, setEyeBreakInterval] = useState(1200); // 20 min
-  const [stretchInterval, setStretchInterval] = useState(3600); // 60 min
-  const [soundEnabled, setSoundEnabled] = useState(false);
-  const [darkMode, setDarkMode] = useState(false);
+  const [eyeBreakInterval, setEyeBreakInterval] = useState(1200);
+  const [stretchInterval, setStretchInterval] = useState(3600);
+  const [soundEnabled, setSoundEnabled] = useState(true);
 
-  // State
+  // timers / session
   const [waterCount, setWaterCount] = useState(0);
   const [eyeBreakTimer, setEyeBreakTimer] = useState(1200);
   const [stretchTimer, setStretchTimer] = useState(3600);
   const [isPaused, setIsPaused] = useState(false);
 
-  const [showNotif, setShowNotif] = useState(null); // "eye" | "stretch" | null
-  const [showExercise, setShowExercise] = useState(null); // "eye" | "stretch" | "wake" | "sleep" | null
+  // modals
   const [showSettings, setShowSettings] = useState(false);
+  const [showExercise, setShowExercise] = useState(null); // "eye"|"stretch"|"wake"|"sleep"|null
+  const [showNotif, setShowNotif] = useState(null); // "eye"|"stretch"|null
 
-  // Exercice actif (un exercice choisi)
-  // { type, exId, name, desc, durationSec, remaining }
-  const [activeExercise, setActiveExercise] = useState(null);
+  // player
+  // { type, queue, index, remainingSec, startedAt, paused, pauseStartedAt, totalPausedMs }
+  const [activeRoutine, setActiveRoutine] = useState(null);
 
-  // Historique & streak (zéro fictif)
+  // history & stats
   const [history, setHistory] = useState([]);
   const [streak, setStreak] = useState(0);
-
-  // Stats du jour (zéro fictif) + détail par exercice + routines
   const [todayStats, setTodayStats] = useState({
     dayKey: dayKey(),
     water: 0,
@@ -150,45 +264,42 @@ export default function ZenhydratationApp() {
 
   const exercises = useMemo(
     () => ({
-      stretch: [
-        { id: "st-neck", name: "Rotation du cou", durationSec: 30, desc: "Tournez lentement la tête de gauche à droite" },
-        { id: "st-shoulders", name: "Étirement des épaules", durationSec: 30, desc: "Roulez vos épaules en arrière puis en avant" },
-        { id: "st-arms", name: "Étirement des bras", durationSec: 30, desc: "Tendez les bras devant vous, entrelacez les doigts" },
-        { id: "st-back", name: "Flexion du dos", durationSec: 30, desc: "Debout, penchez-vous vers l'avant doucement" }
-      ],
       eye: [
-        { id: "eye-2020", name: "Règle 20-20-20", durationSec: 20, desc: "Regardez un objet à 6 mètres pendant 20 secondes" },
-        { id: "eye-blink", name: "Clignements", durationSec: 20, desc: "Clignez des yeux 10 fois lentement" },
-        { id: "eye-massage", name: "Massage des yeux", durationSec: 20, desc: "Fermez les yeux et massez doucement les tempes" }
+        { id: "eye-2020", name: "Règle 20-20-20", durationSec: 20, desc: "Regardez un objet à ~6 mètres pendant 20 secondes." },
+        { id: "eye-blink", name: "Clignements", durationSec: 20, desc: "Clignez lentement des yeux (10 fois environ)." },
+        { id: "eye-massage", name: "Massage des yeux", durationSec: 20, desc: "Fermez les yeux et massez doucement les tempes." }
+      ],
+      stretch: [
+        { id: "st-neck", name: "Rotation du cou", durationSec: 30, desc: "Tournez lentement la tête de gauche à droite." },
+        { id: "st-shoulders", name: "Étirement des épaules", durationSec: 30, desc: "Roulez vos épaules en arrière puis en avant." },
+        { id: "st-arms", name: "Étirement des bras", durationSec: 30, desc: "Tendez les bras, entrelacez les doigts, étirez doucement." },
+        { id: "st-back", name: "Flexion du dos", durationSec: 30, desc: "Penchez-vous vers l'avant doucement (sans douleur)." }
       ],
       wake: [
-        { id: "wk-breath", name: "Respiration énergisante", durationSec: 60, desc: "Respirez profondément : inspirez par le nez, expirez lentement." },
-        { id: "wk-mobility", name: "Mobilité douce", durationSec: 60, desc: "Bougez doucement cou, épaules, hanches (sans douleur)." },
-        { id: "wk-posture", name: "Activation posturale", durationSec: 45, desc: "Redressez-vous, engagez les omoplates, respiration calme." }
+        { id: "wk-breath", name: "Respiration énergisante", durationSec: 60, desc: "Inspirez profondément par le nez, expirez lentement." },
+        { id: "wk-mobility", name: "Mobilité douce", durationSec: 60, desc: "Bougez cou/épaules/hanches, amplitude confortable." },
+        { id: "wk-posture", name: "Activation posturale", durationSec: 45, desc: "Redressez-vous, omoplates basses, respiration calme." }
       ],
       sleep: [
-        { id: "sl-breath", name: "Respiration calmante", durationSec: 60, desc: "Inspirez 4s, expirez 6s, relâchez les épaules." },
-        { id: "sl-neck", name: "Détente nuque/épaules", durationSec: 45, desc: "Relâchez la nuque, épaules basses, micro-rotations lentes." },
-        { id: "sl-scan", name: "Scan corporel", durationSec: 90, desc: "Parcourez mentalement le corps, relâchez chaque zone." }
+        { id: "sl-breath", name: "Respiration calmante", durationSec: 60, desc: "Inspirez 4s, expirez 6s. Relâchez les épaules." },
+        { id: "sl-neck", name: "Détente nuque/épaules", durationSec: 45, desc: "Relâchez nuque/épaules, micro-rotations très lentes." },
+        { id: "sl-scan", name: "Scan corporel", durationSec: 90, desc: "Parcourez le corps et relâchez progressivement." }
       ]
     }),
     []
   );
 
-  const exerciseLabelById = useMemo(() => {
-    const map = {};
-    for (const ex of exercises.eye) map[ex.id] = ex.name;
-    for (const ex of exercises.stretch) map[ex.id] = ex.name;
-    for (const ex of exercises.wake) map[ex.id] = ex.name;
-    for (const ex of exercises.sleep) map[ex.id] = ex.name;
-    return map;
+  const labelsById = useMemo(() => {
+    const m = {};
+    for (const k of ["eye", "stretch", "wake", "sleep"]) {
+      for (const ex of exercises[k]) m[ex.id] = ex.name;
+    }
+    return m;
   }, [exercises]);
 
-  /**
-   * =========================
-   * Load state + history (offline web)
-   * =========================
-   */
+  /* =========================
+   * Load
+   * ========================= */
   useEffect(() => {
     const loadedHistory = readLS(STORAGE_HISTORY_KEY, []);
     const h = Array.isArray(loadedHistory) ? loadedHistory : [];
@@ -198,14 +309,11 @@ export default function ZenhydratationApp() {
     const s = readLS(STORAGE_STATE_KEY, null);
     if (!s) return;
 
-    // settings
     if (typeof s.waterGoal === "number") setWaterGoal(clampInt(s.waterGoal, 6, 12));
     if (typeof s.eyeBreakInterval === "number") setEyeBreakInterval(clampInt(s.eyeBreakInterval, 600, 7200));
     if (typeof s.stretchInterval === "number") setStretchInterval(clampInt(s.stretchInterval, 900, 10800));
     if (typeof s.soundEnabled === "boolean") setSoundEnabled(s.soundEnabled);
-    if (typeof s.darkMode === "boolean") setDarkMode(s.darkMode);
 
-    // restore only if same day (sinon on repart à 0)
     const current = dayKey();
     if (s.todayStats?.dayKey === current) {
       setTodayStats({
@@ -224,11 +332,10 @@ export default function ZenhydratationApp() {
         }
       });
       setWaterCount(clampInt(s.waterCount ?? 0, 0, 200));
-      setEyeBreakTimer(clampInt(s.eyeBreakTimer ?? 1200, 1, 7200));
-      setStretchTimer(clampInt(s.stretchTimer ?? 3600, 1, 10800));
+      setEyeBreakTimer(clampInt(s.eyeBreakTimer ?? eyeBreakInterval, 1, 7200));
+      setStretchTimer(clampInt(s.stretchTimer ?? stretchInterval, 1, 10800));
       setIsPaused(!!s.isPaused);
     } else {
-      // nouveau jour : timers reset aux intervalles
       setTodayStats({
         dayKey: current,
         water: 0,
@@ -246,18 +353,15 @@ export default function ZenhydratationApp() {
     }
   }, []);
 
-  /**
-   * =========================
-   * Save state (debounced)
-   * =========================
-   */
+  /* =========================
+   * Save (debounced)
+   * ========================= */
   useEffect(() => {
     const payload = {
       waterGoal,
       eyeBreakInterval,
       stretchInterval,
       soundEnabled,
-      darkMode,
       waterCount,
       eyeBreakTimer,
       stretchTimer,
@@ -278,7 +382,6 @@ export default function ZenhydratationApp() {
     eyeBreakInterval,
     stretchInterval,
     soundEnabled,
-    darkMode,
     waterCount,
     eyeBreakTimer,
     stretchTimer,
@@ -286,11 +389,9 @@ export default function ZenhydratationApp() {
     todayStats
   ]);
 
-  /**
-   * =========================
-   * Upsert today into history (max 30)
-   * =========================
-   */
+  /* =========================
+   * Upsert today in history (max 30)
+   * ========================= */
   useEffect(() => {
     const current = todayStats.dayKey;
     setHistory((prev) => {
@@ -303,11 +404,9 @@ export default function ZenhydratationApp() {
     });
   }, [todayStats]);
 
-  /**
-   * =========================
-   * Rollover day if app stays open
-   * =========================
-   */
+  /* =========================
+   * Day rollover
+   * ========================= */
   useEffect(() => {
     const id = setInterval(() => {
       const current = dayKey();
@@ -328,18 +427,16 @@ export default function ZenhydratationApp() {
         setStretchTimer(stretchInterval);
         setShowNotif(null);
         setShowExercise(null);
-        setActiveExercise(null);
+        setActiveRoutine(null);
         setIsPaused(false);
       }
     }, 30_000);
     return () => clearInterval(id);
   }, [eyeBreakInterval, stretchInterval]);
 
-  /**
-   * =========================
+  /* =========================
    * Main timers
-   * =========================
-   */
+   * ========================= */
   useEffect(() => {
     if (isPaused) return;
 
@@ -366,43 +463,90 @@ export default function ZenhydratationApp() {
     return () => clearInterval(id);
   }, [isPaused, eyeBreakInterval, stretchInterval]);
 
-  function playBeep(type) {
-    if (!soundEnabled) return;
-    try {
-      const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      if (!AudioCtx) return;
-      const ctx = new AudioCtx();
-      const o = ctx.createOscillator();
-      const g = ctx.createGain();
-      o.type = "sine";
-      o.frequency.value = type === "eye" ? 880 : type === "stretch" ? 660 : type === "wake" ? 740 : 520;
-      g.gain.value = 0.03;
-      o.connect(g);
-      g.connect(ctx.destination);
-      o.start();
-      setTimeout(() => {
-        o.stop();
-        ctx.close();
-      }, 200);
-    } catch {
-      // ignore
-    }
-  }
-
   const triggerNotification = (type) => {
     setShowNotif(type);
-    playBeep(type);
+    if (soundEnabled) playTone({ freq: type === "eye" ? 880 : 660 });
     setTimeout(() => setShowNotif(null), 6000);
   };
 
-  /**
-   * =========================
-   * Exercise runner (selected exercise)
-   * =========================
-   */
-  useEffect(() => {
-    if (!activeExercise) return;
+  /* =========================
+   * Hydration
+   * ========================= */
+  const addWater = () => {
+    if (waterCount < waterGoal) {
+      setWaterCount((v) => v + 1);
+      setTodayStats((s) => ({ ...s, water: s.water + 1 }));
+      if (soundEnabled) playTone({ freq: 740 });
+    }
+  };
 
+  /* =========================
+   * Quick “done” from notifs
+   * ========================= */
+  const completeEyeBreak = () => {
+    setTodayStats((s) => ({ ...s, eyeBreaks: s.eyeBreaks + 1 }));
+    setShowNotif(null);
+    if (soundEnabled) playTone({ freq: 880 });
+  };
+
+  const completeStretch = () => {
+    setTodayStats((s) => ({ ...s, stretches: s.stretches + 1 }));
+    setShowNotif(null);
+    if (soundEnabled) playTone({ freq: 660 });
+  };
+
+  /* =========================
+   * Routine player (queue)
+   * - when an exercise is selected: queue is that single exercise
+   * - when a routine starts: queue is the routine list (3 steps)
+   * ========================= */
+  const startQueue = (type, queue, startIndex = 0) => {
+    const now = Date.now();
+    setActiveRoutine({
+      type,
+      queue,
+      index: startIndex,
+      remainingSec: queue[startIndex].durationSec,
+      startedAt: now,
+      paused: false,
+      pauseStartedAt: null,
+      totalPausedMs: 0
+    });
+  };
+
+  const stopRoutine = () => setActiveRoutine(null);
+
+  const toggleRoutinePause = () => {
+    setActiveRoutine((r) => {
+      if (!r) return r;
+      if (!r.paused) {
+        return { ...r, paused: true, pauseStartedAt: Date.now() };
+      }
+      const pausedMs = r.pauseStartedAt ? Date.now() - r.pauseStartedAt : 0;
+      return { ...r, paused: false, pauseStartedAt: null, totalPausedMs: r.totalPausedMs + pausedMs };
+    });
+  };
+
+  const skipStep = () => {
+    setActiveRoutine((r) => {
+      if (!r) return r;
+      const nextIndex = r.index + 1;
+      if (nextIndex >= r.queue.length) {
+        // finishing early still counts as completed routine? We choose NO.
+        return null;
+      }
+      return { ...r, index: nextIndex, remainingSec: r.queue[nextIndex].durationSec };
+    });
+  };
+
+  const finishRoutineNow = () => {
+    if (!activeRoutine) return;
+    // credit one routine completion even if user terminates manually
+    creditCompletion(activeRoutine.type, activeRoutine.queue[activeRoutine.index]?.id);
+    setActiveRoutine(null);
+  };
+
+  const creditCompletion = (type, exIdOrNull) => {
     const totalKeyMap = {
       eye: "eyeBreaks",
       stretch: "stretches",
@@ -410,80 +554,112 @@ export default function ZenhydratationApp() {
       sleep: "sleepRoutines"
     };
 
+    setTodayStats((s) => {
+      const totalKey = totalKeyMap[type];
+      const details = s.details ?? { eye: {}, stretch: {}, wake: {}, sleep: {} };
+      const nextDetails = { ...details };
+
+      if (exIdOrNull) {
+        const bucket = { ...(details[type] ?? {}) };
+        bucket[exIdOrNull] = (bucket[exIdOrNull] ?? 0) + 1;
+        nextDetails[type] = bucket;
+      }
+
+      return {
+        ...s,
+        [totalKey]: (s[totalKey] ?? 0) + 1,
+        details: nextDetails
+      };
+    });
+
+    if (soundEnabled) playTone({ freq: type === "sleep" ? 520 : 740, durationMs: 220 });
+  };
+
+  // routine ticking
+  useEffect(() => {
+    if (!activeRoutine) return;
+
     const id = setInterval(() => {
-      setActiveExercise((prev) => {
-        if (!prev) return null;
+      setActiveRoutine((r) => {
+        if (!r) return null;
+        if (r.paused) return r;
 
-        if (prev.remaining <= 1) {
-          const group = prev.type;
-          const totalKey = totalKeyMap[group];
-
+        if (r.remainingSec <= 1) {
+          const currentStep = r.queue[r.index];
+          // for single-exercise sessions: count 1 for the module + detail
+          // for multi-step routines: count 1 routine completion at the end (and detail per step)
+          // Here: we always store detail per step, and only increment total on final step.
+          // Additionally: for eye/stretch, if started from tiles (single exercise) queue length = 1 => end => total++.
+          // For wake/sleep, queue length = 3 => end => total++ once.
+          // Details: increment for each completed step.
           setTodayStats((s) => {
-            const currentCount = (s.details?.[group]?.[prev.exId] ?? 0) + 1;
-            return {
-              ...s,
-              [totalKey]: (s[totalKey] ?? 0) + 1,
-              details: {
-                ...(s.details ?? { eye: {}, stretch: {}, wake: {}, sleep: {} }),
-                [group]: {
-                  ...((s.details ?? { eye: {}, stretch: {}, wake: {}, sleep: {} })[group] ?? {}),
-                  [prev.exId]: currentCount
-                }
-              }
-            };
+            const details = s.details ?? { eye: {}, stretch: {}, wake: {}, sleep: {} };
+            const bucket = { ...(details[r.type] ?? {}) };
+            if (currentStep?.id) bucket[currentStep.id] = (bucket[currentStep.id] ?? 0) + 1;
+
+            return { ...s, details: { ...details, [r.type]: bucket } };
           });
 
-          // petit feedback sonore fin d'exercice
-          playBeep(group);
+          const nextIndex = r.index + 1;
+          if (nextIndex < r.queue.length) {
+            // next step
+            if (soundEnabled) playTone({ freq: 600, durationMs: 120, gain: 0.02 });
+            return { ...r, index: nextIndex, remainingSec: r.queue[nextIndex].durationSec };
+          }
 
+          // routine finished => credit total once
+          creditCompletion(r.type, null);
           return null;
         }
 
-        return { ...prev, remaining: prev.remaining - 1 };
+        return { ...r, remainingSec: r.remainingSec - 1 };
       });
     }, 1000);
 
     return () => clearInterval(id);
-  }, [activeExercise]); // (soundEnabled déjà dans playBeep)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeRoutine, soundEnabled]);
 
-  /**
-   * =========================
-   * Actions
-   * =========================
-   */
-  const addWater = () => {
-    if (waterCount < waterGoal) {
-      setWaterCount((v) => v + 1);
-      setTodayStats((s) => ({ ...s, water: s.water + 1 }));
-      playBeep("wake");
-    }
-  };
-
-  const completeEyeBreak = () => {
-    // Notif in-app => crédite une pause yeux (sans détail par exercice)
-    setTodayStats((s) => ({ ...s, eyeBreaks: s.eyeBreaks + 1 }));
-    setShowNotif(null);
-    playBeep("eye");
-  };
-
-  const completeStretch = () => {
-    // Notif in-app => crédite un étirement (sans détail par exercice)
-    setTodayStats((s) => ({ ...s, stretches: s.stretches + 1 }));
-    setShowNotif(null);
-    playBeep("stretch");
-  };
-
+  /* =========================
+   * Formatting / derived
+   * ========================= */
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${String(secs).padStart(2, "0")}`;
   };
 
-  /**
-   * =========================
-   * Stats computations (no fake)
-   * =========================
-   */
+  const hydrationPct = Math.round((waterCount / Math.max(1, waterGoal)) * 100);
+
+  const nextHero = useMemo(() => {
+    // hero prioritization: next eye vs stretch by time remaining
+    const eyeSooner = eyeBreakTimer <= stretchTimer;
+    const type = eyeSooner ? "eye" : "stretch";
+    const label = type === "eye" ? "Pause yeux" : "Étirements";
+    const time = type === "eye" ? formatTime(eyeBreakTimer) : formatTime(stretchTimer);
+    const pct =
+      type === "eye"
+        ? ((eyeBreakInterval - eyeBreakTimer) / eyeBreakInterval) * 100
+        : ((stretchInterval - stretchTimer) / stretchInterval) * 100;
+
+    return { type, label, time, pct: Math.max(0, Math.min(100, pct)) };
+  }, [eyeBreakTimer, stretchTimer, eyeBreakInterval, stretchInterval]);
+
+  const themeGlow = (type) => {
+    switch (type) {
+      case "eye":
+        return { glow: "violet", ring: "text-violet-300", icon: <Eye className="h-6 w-6 text-violet-200/90" /> };
+      case "stretch":
+        return { glow: "emerald", ring: "text-emerald-300", icon: <Activity className="h-6 w-6 text-emerald-200/90" /> };
+      case "wake":
+        return { glow: "amber", ring: "text-amber-300", icon: <Sun className="h-6 w-6 text-amber-200/90" /> };
+      case "sleep":
+        return { glow: "indigo", ring: "text-indigo-300", icon: <Moon className="h-6 w-6 text-indigo-200/90" /> };
+      default:
+        return { glow: "cyan", ring: "text-cyan-300", icon: <Eye className="h-6 w-6 text-cyan-200/90" /> };
+    }
+  };
+
   const lastNDays = (n) => {
     const sorted = [...history].sort((a, b) => (a.dayKey < b.dayKey ? -1 : 1));
     return sorted.slice(Math.max(0, sorted.length - n));
@@ -495,7 +671,7 @@ export default function ZenhydratationApp() {
   const sum = (arr, k) => arr.reduce((acc, x) => acc + (x[k] ?? 0), 0);
 
   const chart7 = window7.map((d) => ({
-    day: d.dayKey.slice(5), // MM-DD
+    day: d.dayKey.slice(5),
     water: d.water ?? 0,
     eye: d.eyeBreaks ?? 0,
     stretch: d.stretches ?? 0,
@@ -512,171 +688,165 @@ export default function ZenhydratationApp() {
     sleep: d.sleepRoutines ?? 0
   }));
 
-  /**
-   * =========================
+  /* =========================
    * Screens
-   * =========================
-   */
-  const HomeScreen = () => (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className={`text-2xl font-bold ${darkMode ? "text-gray-100" : "text-gray-800"}`}>
-            Zenhydratation
-          </h1>
-          <p className={`text-sm ${darkMode ? "text-gray-300" : "text-gray-600"}`}>
-            Hydratation, pauses yeux, étirements + routines
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setShowSettings(true)}
-            className={`p-3 rounded-full ${darkMode ? "bg-gray-700 hover:bg-gray-600" : "bg-gray-200 hover:bg-gray-300"} transition-colors`}
-          >
-            <Settings size={20} className={darkMode ? "text-gray-200" : "text-gray-700"} />
-          </button>
-          <button
-            onClick={() => setIsPaused((p) => !p)}
-            className={`p-3 rounded-full ${isPaused ? "bg-green-500" : darkMode ? "bg-gray-600" : "bg-gray-300"} transition-colors`}
-            title={isPaused ? "Reprendre" : "Pause"}
-          >
-            {isPaused ? <Play size={20} className="text-white" /> : <Pause size={20} className={darkMode ? "text-gray-100" : "text-gray-700"} />}
-          </button>
-        </div>
-      </div>
+   * ========================= */
+  const HomeScreen = () => {
+    const heroTheme = themeGlow(nextHero.type);
 
-      {/* Streak (calculated) */}
-      <div className="bg-gradient-to-r from-amber-400 to-orange-500 rounded-2xl p-4 text-white shadow-lg flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="text-3xl">🔥</div>
-          <div>
-            <p className="text-sm opacity-90">Série en cours</p>
-            <p className="text-2xl font-bold">{streak} jour{streak > 1 ? "s" : ""}</p>
-          </div>
-        </div>
-        <div className="text-right">
-          <p className="text-xs opacity-90">Basé sur l’historique</p>
-          <p className="text-sm font-semibold">Offline</p>
-        </div>
-      </div>
-
-      {/* Hydratation */}
-      <div className="bg-gradient-to-br from-blue-400 to-blue-600 rounded-3xl p-6 text-white shadow-lg">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <Droplets size={24} />
-            <h2 className="text-lg font-semibold">Hydratation</h2>
-          </div>
-          <span className="text-sm opacity-90">{waterCount}/{waterGoal} verres</span>
-        </div>
-
-        <div className="flex gap-2 mb-4">
-          {Array.from({ length: waterGoal }).map((_, i) => (
-            <div
-              key={i}
-              className={`h-10 flex-1 rounded-lg ${i < waterCount ? "bg-white" : "bg-white/20"} transition-all`}
-            />
-          ))}
-        </div>
-
-        <button
-          onClick={addWater}
-          className="w-full bg-white text-blue-600 py-3 rounded-xl font-semibold hover:bg-blue-50 transition-colors"
-        >
-          + J'ai bu un verre
-        </button>
-      </div>
-
-      {/* Timers (Yeux / Étirements) */}
-      <div className="grid grid-cols-2 gap-4">
-        <button
-          onClick={() => setShowExercise("eye")}
-          className="bg-gradient-to-br from-purple-400 to-purple-600 rounded-2xl p-5 text-white shadow-lg text-left hover:scale-105 transition-transform"
-        >
-          <Eye size={28} className="mb-3" />
-          <p className="text-xs mb-2 opacity-90">Pause yeux dans</p>
-          <p className="text-2xl font-bold mb-3">{formatTime(eyeBreakTimer)}</p>
-          <div className="h-2 bg-white/20 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-white transition-all"
-              style={{ width: `${((eyeBreakInterval - eyeBreakTimer) / eyeBreakInterval) * 100}%` }}
-            />
-          </div>
-          <p className="mt-3 text-xs opacity-90">Choisir un exercice</p>
-        </button>
-
-        <button
-          onClick={() => setShowExercise("stretch")}
-          className="bg-gradient-to-br from-green-400 to-green-600 rounded-2xl p-5 text-white shadow-lg text-left hover:scale-105 transition-transform"
-        >
-          <Activity size={28} className="mb-3" />
-          <p className="text-xs mb-2 opacity-90">Étirement dans</p>
-          <p className="text-2xl font-bold mb-3">{formatTime(stretchTimer)}</p>
-          <div className="h-2 bg-white/20 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-white transition-all"
-              style={{ width: `${((stretchInterval - stretchTimer) / stretchInterval) * 100}%` }}
-            />
-          </div>
-          <p className="mt-3 text-xs opacity-90">Choisir un exercice</p>
-        </button>
-      </div>
-
-      {/* NEW: Routines (Réveil / Coucher) - same visual style */}
-      <div className="grid grid-cols-2 gap-4">
-        <button
-          onClick={() => setShowExercise("wake")}
-          className="bg-gradient-to-br from-yellow-400 to-orange-500 rounded-2xl p-5 text-white shadow-lg text-left hover:scale-105 transition-transform"
-        >
-          <Sun size={28} className="mb-3" />
-          <p className="text-xs mb-2 opacity-90">Routine</p>
-          <p className="text-2xl font-bold mb-1">Réveil</p>
-          <p className="text-xs opacity-90">Énergie + posture</p>
-        </button>
-
-        <button
-          onClick={() => setShowExercise("sleep")}
-          className="bg-gradient-to-br from-indigo-500 to-blue-700 rounded-2xl p-5 text-white shadow-lg text-left hover:scale-105 transition-transform"
-        >
-          <Moon size={28} className="mb-3" />
-          <p className="text-xs mb-2 opacity-90">Routine</p>
-          <p className="text-2xl font-bold mb-1">Coucher</p>
-          <p className="text-xs opacity-90">Calme + relâchement</p>
-        </button>
-      </div>
-
-      {/* Today stats */}
-      <div className={`${darkMode ? "bg-gray-800 border-gray-700" : "bg-white border-gray-100"} rounded-2xl p-5 shadow-md border`}>
-        <h3 className={`font-semibold mb-4 ${darkMode ? "text-gray-100" : "text-gray-800"}`}>Aujourd'hui</h3>
-        <div className="space-y-3">
-          <RowStat icon={<Droplets size={20} className="text-blue-600" />} label="Eau bue" value={`${todayStats.water} verre${todayStats.water > 1 ? "s" : ""}`} darkMode={darkMode} />
-          <RowStat icon={<Eye size={20} className="text-purple-600" />} label="Pauses yeux" value={`${todayStats.eyeBreaks}`} darkMode={darkMode} />
-          <RowStat icon={<Activity size={20} className="text-green-600" />} label="Étirements" value={`${todayStats.stretches}`} darkMode={darkMode} />
-          <RowStat icon={<Sun size={20} className="text-orange-600" />} label="Routine réveil" value={`${todayStats.wakeRoutines}`} darkMode={darkMode} />
-          <RowStat icon={<Moon size={20} className="text-indigo-600" />} label="Routine coucher" value={`${todayStats.sleepRoutines}`} darkMode={darkMode} />
-        </div>
-      </div>
-    </div>
-  );
-
-  const DetailBlock = ({ title, groupKey }) => {
-    const entries = Object.entries(todayStats.details?.[groupKey] ?? {});
     return (
-      <div className="space-y-2">
-        <p className={`${darkMode ? "text-gray-300" : "text-gray-600"} text-sm font-semibold`}>{title}</p>
-        {entries.length === 0 ? (
-          <p className={`${darkMode ? "text-gray-300" : "text-gray-600"} text-sm`}>Aucun exercice effectué.</p>
-        ) : (
-          <div className="space-y-2">
-            {entries.map(([id, count]) => (
-              <div key={id} className="flex justify-between text-sm">
-                <span className={darkMode ? "text-gray-200" : "text-gray-800"}>{exerciseLabelById[id] ?? id}</span>
-                <span className={darkMode ? "text-gray-200" : "text-gray-800"}>{count}</span>
+      <div className="px-5 pb-24 pt-6">
+        {/* Top header */}
+        <div className="flex items-start justify-between">
+          <div>
+            <div className={cn("text-[34px] font-semibold tracking-tight leading-tight", TEXT_PRIMARY)}>
+              Zenhydratation
+            </div>
+            <div className={cn("mt-1 text-[14px] font-medium", TEXT_MUTED)}>
+              Focus. Respire. Hydrate.
+            </div>
+
+            <div className="mt-3 flex items-center gap-3">
+              <div className={cn("rounded-2xl px-4 py-2", GLASS_SOFT)}>
+                <span className={cn("text-[13px] font-semibold", TEXT_SECONDARY)}>🔥 Série</span>{" "}
+                <span className={cn("text-[13px] font-semibold", TEXT_PRIMARY)}>{streak}j</span>
               </div>
-            ))}
+
+              <div className={cn("rounded-2xl px-4 py-2", GLASS_SOFT)}>
+                <span className={cn("text-[13px] font-semibold", TEXT_SECONDARY)}>Mode</span>{" "}
+                <span className={cn("text-[13px] font-semibold", TEXT_PRIMARY)}>Offline</span>
+              </div>
+            </div>
           </div>
-        )}
+
+          <div className="flex gap-3">
+            <button
+              onClick={() => setShowSettings(true)}
+              className={cn("h-11 w-11 rounded-2xl flex items-center justify-center transition hover:bg-white/[0.10]", GLASS_SOFT)}
+              aria-label="Paramètres"
+            >
+              <Settings className="h-5 w-5 text-white/75" />
+            </button>
+
+            <button
+              onClick={() => setIsPaused((p) => !p)}
+              className={cn("h-11 w-11 rounded-2xl flex items-center justify-center transition hover:bg-white/[0.10]", GLASS_SOFT)}
+              title={isPaused ? "Reprendre" : "Pause"}
+              aria-label={isPaused ? "Reprendre" : "Pause"}
+            >
+              {isPaused ? <Play className="h-5 w-5 text-white/85" /> : <Pause className="h-5 w-5 text-white/85" />}
+            </button>
+          </div>
+        </div>
+
+        {/* Hero “À faire maintenant” */}
+        <div className={cn("mt-6 rounded-[28px] p-6", GLASS)}>
+          <div className="flex items-center gap-5">
+            <GlassIconPlate glow={heroTheme.glow}>{heroTheme.icon}</GlassIconPlate>
+
+            <div className="flex-1 min-w-0">
+              <div className={cn("text-[28px] font-semibold leading-none", TEXT_PRIMARY)}>
+                {nextHero.label}
+              </div>
+              <div className={cn("mt-2 text-[18px] font-medium", TEXT_SECONDARY)}>
+                Dans {nextHero.time}
+              </div>
+            </div>
+
+            <ProgressRing pct={nextHero.pct} size={56} stroke={7} glowClass={heroTheme.ring} />
+          </div>
+
+          <div className="mt-6 flex justify-end">
+            <button
+              onClick={() => {
+                // open list for that module
+                setShowExercise(nextHero.type);
+                if (soundEnabled) playTone({ freq: 520, gain: 0.02 });
+              }}
+              className={cn(
+                "rounded-full px-10 py-3 text-[16px] font-semibold tracking-wide",
+                "border border-white/10 bg-gradient-to-b from-white/[0.10] to-white/[0.06] hover:from-white/[0.14] hover:to-white/[0.08] transition",
+                "shadow-[0_14px_30px_rgba(0,0,0,0.35)]"
+              )}
+            >
+              <span className={TEXT_PRIMARY}>DÉMARRER</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Hydration */}
+        <div className={cn("mt-6 rounded-[28px] p-6", GLASS)}>
+          <div className="flex items-end justify-between">
+            <div className={cn("text-[28px] font-semibold leading-none", TEXT_PRIMARY)}>
+              Hydratation
+            </div>
+            <div className={cn("text-[16px] font-semibold", TEXT_SECONDARY)}>
+              {waterCount} / {waterGoal} verres
+            </div>
+          </div>
+
+          <div className="mt-5">
+            <div className="h-3 w-full rounded-full bg-white/10 overflow-hidden border border-white/10">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-cyan-400/70 to-blue-400/70"
+                style={{ width: `${Math.max(0, Math.min(100, hydrationPct))}%` }}
+              />
+            </div>
+
+            <button
+              onClick={addWater}
+              className={cn("mt-5 w-full text-left text-[22px] font-medium hover:text-white/85 transition", TEXT_SECONDARY)}
+            >
+              Ajouter un verre
+            </button>
+          </div>
+        </div>
+
+        {/* Shortcuts tiles 2x2 */}
+        <div className="mt-7">
+          <div className={cn("text-[28px] font-semibold", TEXT_PRIMARY)}>Raccourcis</div>
+
+          <div className="mt-5 grid grid-cols-2 gap-4">
+            <ShortcutTile
+              title="Yeux"
+              subtitle={formatTime(eyeBreakTimer)}
+              glow="violet"
+              icon={<Eye className="h-6 w-6 text-violet-200/90" />}
+              onClick={() => setShowExercise("eye")}
+            />
+
+            <ShortcutTile
+              title="Étirements"
+              subtitle={formatTime(stretchTimer)}
+              glow="emerald"
+              icon={<Activity className="h-6 w-6 text-emerald-200/90" />}
+              onClick={() => setShowExercise("stretch")}
+            />
+
+            <ShortcutTile
+              title="Réveil"
+              subtitle={`${exercises.wake.length} étapes`}
+              glow="amber"
+              icon={<Sun className="h-6 w-6 text-amber-200/90" />}
+              onClick={() => startQueue("wake", exercises.wake)}
+            />
+
+            <ShortcutTile
+              title="Coucher"
+              subtitle={`${exercises.sleep.length} étapes`}
+              glow="indigo"
+              icon={<Moon className="h-6 w-6 text-indigo-200/90" />}
+              onClick={() => startQueue("sleep", exercises.sleep)}
+            />
+          </div>
+        </div>
+
+        {/* Today line */}
+        <div className={cn("mt-7 text-[14px] leading-snug", TEXT_MUTED)}>
+          Aujourd&apos;hui: Eau {todayStats.water} | Yeux {todayStats.eyeBreaks} | Étirements {todayStats.stretches}
+          <br />
+          Réveil {todayStats.wakeRoutines} | Coucher {todayStats.sleepRoutines}
+        </div>
       </div>
     );
   };
@@ -685,402 +855,581 @@ export default function ZenhydratationApp() {
     const workH = Math.floor(todayStats.workTime / 3600);
     const workM = Math.floor((todayStats.workTime % 3600) / 60);
 
-    const w7 = window7.length ? window7 : [];
-    const w30 = window30.length ? window30 : [];
+    const renderDetail = (groupKey, title) => {
+      const entries = Object.entries(todayStats.details?.[groupKey] ?? {});
+      return (
+        <div className={cn("rounded-[24px] p-5", GLASS_SOFT)}>
+          <div className={cn("text-[16px] font-semibold", TEXT_PRIMARY)}>{title}</div>
+          {entries.length === 0 ? (
+            <div className={cn("mt-2 text-[13px]", TEXT_MUTED)}>Aucune donnée.</div>
+          ) : (
+            <div className="mt-3 space-y-2">
+              {entries.map(([id, count]) => (
+                <div key={id} className="flex items-center justify-between">
+                  <div className={cn("text-[13px] font-medium", TEXT_SECONDARY)}>{labelsById[id] ?? id}</div>
+                  <div className={cn("text-[13px] font-semibold", TEXT_PRIMARY)}>{count}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    };
 
     return (
-      <div className="p-6 space-y-6">
-        <h1 className={`text-2xl font-bold ${darkMode ? "text-gray-100" : "text-gray-800"}`}>Statistiques</h1>
-
-        <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-3xl p-6 text-white shadow-lg">
-          <Clock size={28} className="mb-3" />
-          <p className="text-sm opacity-90 mb-1">Temps de travail aujourd'hui</p>
-          <p className="text-3xl font-bold">{workH}h {workM}m</p>
-        </div>
-
-        {/* Détail par exercice (aujourd'hui) */}
-        <div className={`${darkMode ? "bg-gray-800 border-gray-700" : "bg-white border-gray-100"} rounded-2xl p-5 shadow-md border`}>
-          <h3 className={`font-semibold mb-4 ${darkMode ? "text-gray-100" : "text-gray-800"}`}>Détail des exercices (aujourd’hui)</h3>
-          <div className="space-y-4">
-            <DetailBlock title="Yeux" groupKey="eye" />
-            <DetailBlock title="Étirements" groupKey="stretch" />
-            <DetailBlock title="Routine réveil" groupKey="wake" />
-            <DetailBlock title="Routine coucher" groupKey="sleep" />
+      <div className="px-5 pb-24 pt-6 space-y-6">
+        <div className="flex items-end justify-between">
+          <div className={cn("text-[28px] font-semibold", TEXT_PRIMARY)}>Statistiques</div>
+          <div className={cn("rounded-2xl px-4 py-2", GLASS_SOFT)}>
+            <span className={cn("text-[13px] font-semibold", TEXT_SECONDARY)}>🔥 {streak}j</span>
           </div>
         </div>
 
-        {/* Résumé 7 jours */}
-        <div className={`${darkMode ? "bg-gray-800 border-gray-700" : "bg-white border-gray-100"} rounded-2xl p-5 shadow-md border`}>
-          <h3 className={`font-semibold mb-3 ${darkMode ? "text-gray-100" : "text-gray-800"}`}>Résumé 7 jours</h3>
-          <div className={`text-sm ${darkMode ? "text-gray-300" : "text-gray-600"} grid grid-cols-5 gap-3`}>
-            <div><span className="font-semibold">{sum(w7, "water")}</span><div>Eau</div></div>
-            <div><span className="font-semibold">{sum(w7, "eyeBreaks")}</span><div>Yeux</div></div>
-            <div><span className="font-semibold">{sum(w7, "stretches")}</span><div>Étire</div></div>
-            <div><span className="font-semibold">{sum(w7, "wakeRoutines")}</span><div>Réveil</div></div>
-            <div><span className="font-semibold">{sum(w7, "sleepRoutines")}</span><div>Coucher</div></div>
+        <div className={cn("rounded-[28px] p-6", GLASS)}>
+          <div className="flex items-center gap-3">
+            <Clock className="h-6 w-6 text-white/80" />
+            <div>
+              <div className={cn("text-[13px] font-semibold", TEXT_MUTED)}>Temps de travail aujourd&apos;hui</div>
+              <div className={cn("text-[26px] font-semibold", TEXT_PRIMARY)}>{workH}h {workM}m</div>
+            </div>
           </div>
         </div>
 
-        {/* Graphique 7 jours */}
-        <div className={`${darkMode ? "bg-gray-800 border-gray-700" : "bg-white border-gray-100"} rounded-2xl p-5 shadow-md border`}>
-          <h3 className={`font-semibold mb-4 ${darkMode ? "text-gray-100" : "text-gray-800"}`}>Graphique 7 jours</h3>
-          {chart7.length === 0 ? (
-            <p className={darkMode ? "text-gray-300 text-sm" : "text-gray-600 text-sm"}>
-              Aucune donnée pour l’instant (tout commence à 0).
-            </p>
-          ) : (
-            <div style={{ width: "100%", height: 260 }}>
+        <div className={cn("rounded-[28px] p-6", GLASS)}>
+          <div className="flex items-center justify-between">
+            <div className={cn("text-[16px] font-semibold", TEXT_PRIMARY)}>Résumé 7 jours</div>
+            <div className={cn("text-[13px] font-semibold", TEXT_MUTED)}>
+              Eau {sum(window7, "water")} · Yeux {sum(window7, "eyeBreaks")} · Étire {sum(window7, "stretches")}
+            </div>
+          </div>
+
+          <div className="mt-4" style={{ width: "100%", height: 260 }}>
+            {chart7.length === 0 ? (
+              <div className={cn("text-[13px]", TEXT_MUTED)}>Aucune donnée pour l’instant.</div>
+            ) : (
               <ResponsiveContainer>
                 <BarChart data={chart7}>
-                  <XAxis dataKey="day" />
-                  <YAxis allowDecimals={false} />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="water" name="Eau" />
-                  <Bar dataKey="eye" name="Yeux" />
-                  <Bar dataKey="stretch" name="Étirements" />
-                  <Bar dataKey="wake" name="Réveil" />
-                  <Bar dataKey="sleep" name="Coucher" />
+                  <XAxis dataKey="day" tick={{ fill: "rgba(255,255,255,0.65)", fontSize: 12 }} />
+                  <YAxis allowDecimals={false} tick={{ fill: "rgba(255,255,255,0.65)", fontSize: 12 }} />
+                  <Tooltip
+                    contentStyle={{
+                      background: "rgba(10, 12, 18, 0.92)",
+                      border: "1px solid rgba(255,255,255,0.10)",
+                      borderRadius: 14,
+                      color: "rgba(255,255,255,0.9)"
+                    }}
+                  />
+                  <Legend wrapperStyle={{ color: "rgba(255,255,255,0.7)" }} />
+                  <Bar dataKey="water" name="Eau" fill="rgba(34, 211, 238, 0.60)" />
+                  <Bar dataKey="eye" name="Yeux" fill="rgba(167, 139, 250, 0.60)" />
+                  <Bar dataKey="stretch" name="Étirements" fill="rgba(52, 211, 153, 0.60)" />
+                  <Bar dataKey="wake" name="Réveil" fill="rgba(251, 191, 36, 0.60)" />
+                  <Bar dataKey="sleep" name="Coucher" fill="rgba(129, 140, 248, 0.60)" />
                 </BarChart>
               </ResponsiveContainer>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
-        {/* Graphique 30 jours */}
-        <div className={`${darkMode ? "bg-gray-800 border-gray-700" : "bg-white border-gray-100"} rounded-2xl p-5 shadow-md border`}>
-          <h3 className={`font-semibold mb-4 ${darkMode ? "text-gray-100" : "text-gray-800"}`}>Graphique 30 jours</h3>
-          {chart30.length === 0 ? (
-            <p className={darkMode ? "text-gray-300 text-sm" : "text-gray-600 text-sm"}>
-              Aucune donnée sur 30 jours pour l’instant.
-            </p>
-          ) : (
-            <div style={{ width: "100%", height: 260 }}>
+        <div className={cn("rounded-[28px] p-6", GLASS)}>
+          <div className="flex items-center justify-between">
+            <div className={cn("text-[16px] font-semibold", TEXT_PRIMARY)}>Graphique 30 jours</div>
+            <div className={cn("text-[13px] font-semibold", TEXT_MUTED)}>
+              Total routines: {sum(window30, "wakeRoutines") + sum(window30, "sleepRoutines")}
+            </div>
+          </div>
+
+          <div className="mt-4" style={{ width: "100%", height: 260 }}>
+            {chart30.length === 0 ? (
+              <div className={cn("text-[13px]", TEXT_MUTED)}>Aucune donnée sur 30 jours.</div>
+            ) : (
               <ResponsiveContainer>
                 <BarChart data={chart30}>
-                  <XAxis dataKey="day" />
-                  <YAxis allowDecimals={false} />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="water" name="Eau" />
-                  <Bar dataKey="eye" name="Yeux" />
-                  <Bar dataKey="stretch" name="Étirements" />
-                  <Bar dataKey="wake" name="Réveil" />
-                  <Bar dataKey="sleep" name="Coucher" />
+                  <XAxis dataKey="day" tick={{ fill: "rgba(255,255,255,0.65)", fontSize: 12 }} />
+                  <YAxis allowDecimals={false} tick={{ fill: "rgba(255,255,255,0.65)", fontSize: 12 }} />
+                  <Tooltip
+                    contentStyle={{
+                      background: "rgba(10, 12, 18, 0.92)",
+                      border: "1px solid rgba(255,255,255,0.10)",
+                      borderRadius: 14,
+                      color: "rgba(255,255,255,0.9)"
+                    }}
+                  />
+                  <Legend wrapperStyle={{ color: "rgba(255,255,255,0.7)" }} />
+                  <Bar dataKey="water" name="Eau" fill="rgba(34, 211, 238, 0.55)" />
+                  <Bar dataKey="eye" name="Yeux" fill="rgba(167, 139, 250, 0.55)" />
+                  <Bar dataKey="stretch" name="Étirements" fill="rgba(52, 211, 153, 0.55)" />
+                  <Bar dataKey="wake" name="Réveil" fill="rgba(251, 191, 36, 0.55)" />
+                  <Bar dataKey="sleep" name="Coucher" fill="rgba(129, 140, 248, 0.55)" />
                 </BarChart>
               </ResponsiveContainer>
-            </div>
-          )}
+            )}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4">
+          {renderDetail("eye", "Détails aujourd’hui — Yeux")}
+          {renderDetail("stretch", "Détails aujourd’hui — Étirements")}
+          {renderDetail("wake", "Détails aujourd’hui — Réveil")}
+          {renderDetail("sleep", "Détails aujourd’hui — Coucher")}
         </div>
       </div>
     );
   };
 
-  /**
-   * =========================
-   * Render
-   * =========================
-   */
-  return (
-    <div className={`${darkMode ? "bg-gray-900" : "bg-gray-50"} max-w-md mx-auto min-h-screen relative`}>
-      {/* In-app Notifications */}
-      {showNotif === "eye" && (
-        <NotifCard
-          icon={<Eye size={24} className="text-purple-600" />}
-          title="Temps de repos !"
-          subtitle="Reposez vos yeux 20 secondes"
-          text="Regardez au loin (6 mètres) pendant 20 secondes"
-          color="purple"
-          onClose={() => setShowNotif(null)}
-          onDone={completeEyeBreak}
-        />
-      )}
+  /* =========================
+   * Exercise selection modal
+   * - click an exercise -> play only that exercise (queue length 1)
+   * - for wake/sleep, also offer a “Démarrer la routine” CTA
+   * ========================= */
+  const ExerciseModal = () => {
+    if (!showExercise) return null;
 
-      {showNotif === "stretch" && (
-        <NotifCard
-          icon={<Activity size={24} className="text-green-600" />}
-          title="Temps de bouger !"
-          subtitle="Faites des étirements"
-          text="Levez-vous et étirez-vous pendant 2 minutes"
-          color="green"
-          onClose={() => setShowNotif(null)}
-          onDone={completeStretch}
-        />
-      )}
+    const list = exercises[showExercise] ?? [];
+    const theme = themeGlow(showExercise);
+    const title =
+      showExercise === "eye"
+        ? "👁️ Exercices Yeux"
+        : showExercise === "stretch"
+          ? "🤸 Étirements"
+          : showExercise === "wake"
+            ? "🌅 Routine Réveil"
+            : "🌙 Routine Coucher";
 
-      {/* Exercise list modal (click to start) */}
-      {showExercise && (
-        <div className="fixed inset-0 bg-black/50 flex items-end z-50" onClick={() => setShowExercise(null)}>
-          <div
-            className={`${darkMode ? "bg-gray-900 text-gray-100" : "bg-white"} rounded-t-3xl w-full max-w-md mx-auto p-6 max-h-[80vh] overflow-y-auto`}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-bold">
-                {showExercise === "eye"
-                  ? "👁️ Exercices pour les yeux"
-                  : showExercise === "stretch"
-                    ? "🤸 Exercices d'étirement"
-                    : showExercise === "wake"
-                      ? "🌅 Routine réveil"
-                      : "🌙 Routine coucher"}
-              </h3>
-              <button onClick={() => setShowExercise(null)}>
-                <X size={24} className={darkMode ? "text-gray-300" : "text-gray-400"} />
+    return (
+      <div className="fixed inset-0 z-50">
+        <div className="absolute inset-0 bg-black/55" onClick={() => setShowExercise(null)} />
+        <div className="absolute inset-x-0 bottom-0">
+          <div className={cn("mx-auto max-w-md rounded-t-[32px] p-6", GLASS, "border-b-0")}>
+            <div className="flex items-center justify-between">
+              <div className={cn("text-[18px] font-semibold", TEXT_PRIMARY)}>{title}</div>
+              <button
+                onClick={() => setShowExercise(null)}
+                className={cn("h-10 w-10 rounded-2xl flex items-center justify-center hover:bg-white/[0.10] transition", GLASS_SOFT)}
+              >
+                <X className="h-5 w-5 text-white/75" />
               </button>
             </div>
 
-            <div className="space-y-3">
-              {exercises[showExercise].map((exercise) => (
+            {showExercise === "wake" || showExercise === "sleep" ? (
+              <div className="mt-4">
                 <button
-                  key={exercise.id}
                   onClick={() => {
-                    setActiveExercise({
-                      type: showExercise,
-                      exId: exercise.id,
-                      name: exercise.name,
-                      desc: exercise.desc,
-                      durationSec: exercise.durationSec,
-                      remaining: exercise.durationSec
-                    });
+                    startQueue(showExercise, list);
                     setShowExercise(null);
-                    playBeep(showExercise);
+                    if (soundEnabled) playTone({ freq: showExercise === "wake" ? 740 : 520, durationMs: 200 });
                   }}
-                  className={`${darkMode ? "bg-gray-800 border-gray-700" : "bg-gray-50 border-gray-100"} w-full text-left rounded-xl p-4 border hover:scale-[1.01] transition`}
+                  className={cn(
+                    "w-full rounded-2xl px-4 py-3 font-semibold text-[15px] transition",
+                    "border border-white/10 bg-gradient-to-b from-white/[0.10] to-white/[0.06] hover:from-white/[0.14] hover:to-white/[0.08]"
+                  )}
                 >
-                  <div className="flex items-start justify-between mb-2">
-                    <h4 className="font-semibold">{exercise.name}</h4>
-                    <span className="text-xs bg-blue-100 text-blue-600 px-2 py-1 rounded-full">
-                      {exercise.durationSec}s
-                    </span>
+                  <span className={TEXT_PRIMARY}>Démarrer la routine complète</span>
+                </button>
+              </div>
+            ) : null}
+
+            <div className="mt-4 space-y-3 max-h-[52vh] overflow-y-auto pr-1">
+              {list.map((ex) => (
+                <button
+                  key={ex.id}
+                  onClick={() => {
+                    startQueue(showExercise, [ex], 0);
+                    setShowExercise(null);
+                    if (soundEnabled) playTone({ freq: 600, durationMs: 120, gain: 0.02 });
+                  }}
+                  className={cn(
+                    "w-full text-left rounded-[22px] p-4 transition hover:bg-white/[0.10] active:scale-[0.99]",
+                    GLASS_SOFT
+                  )}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className={cn("text-[15px] font-semibold truncate", TEXT_PRIMARY)}>{ex.name}</div>
+                      <div className={cn("mt-1 text-[13px] leading-snug", TEXT_MUTED)}>{ex.desc}</div>
+                    </div>
+                    <div className={cn("shrink-0 rounded-full px-3 py-1 text-[12px] font-semibold", "bg-white/10 border border-white/10")}>
+                      <span className={TEXT_SECONDARY}>{ex.durationSec}s</span>
+                    </div>
                   </div>
-                  <p className={darkMode ? "text-gray-300 text-sm" : "text-gray-600 text-sm"}>{exercise.desc}</p>
-                  <p className="mt-2 text-xs text-blue-600 font-semibold">Démarrer</p>
+                  <div className="mt-3 flex items-center justify-between">
+                    <div className={cn("text-[12px] font-semibold", TEXT_MUTED)}>Démarrer</div>
+                    <div className="flex items-center gap-2">
+                      <div className={cn("h-2 w-2 rounded-full", theme.ring.replace("text-", "bg-") + "/70")} />
+                      <div className={cn("text-[12px] font-semibold", TEXT_MUTED)}>
+                        {showExercise === "eye"
+                          ? "Yeux"
+                          : showExercise === "stretch"
+                            ? "Étirements"
+                            : showExercise === "wake"
+                              ? "Réveil"
+                              : "Coucher"}
+                      </div>
+                    </div>
+                  </div>
                 </button>
               ))}
             </div>
           </div>
         </div>
-      )}
+      </div>
+    );
+  };
 
-      {/* Active exercise fullscreen */}
-      {activeExercise && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-6 w-80 text-center space-y-4">
-            <h2 className="text-xl font-bold">{activeExercise.name}</h2>
-            <p className="text-gray-600">{activeExercise.desc}</p>
-            <div className="text-5xl font-bold text-blue-600">{activeExercise.remaining}s</div>
+  /* =========================
+   * Routine player overlay (Neo Glass)
+   * ========================= */
+  const RoutinePlayer = () => {
+    if (!activeRoutine) return null;
 
-            <div className="flex gap-2">
+    const step = activeRoutine.queue[activeRoutine.index];
+    const totalSteps = activeRoutine.queue.length;
+    const stepNo = activeRoutine.index + 1;
+
+    const t = themeGlow(activeRoutine.type);
+    const pct = step ? ((step.durationSec - activeRoutine.remainingSec) / step.durationSec) * 100 : 0;
+
+    return (
+      <div className="fixed inset-0 z-50">
+        <div className="absolute inset-0 bg-black/70" />
+        <div className="absolute inset-0 flex items-center justify-center p-5">
+          <div className={cn("w-full max-w-md rounded-[32px] p-6", GLASS)}>
+            <div className="flex items-start justify-between">
+              <div>
+                <div className={cn("text-[16px] font-semibold", TEXT_PRIMARY)}>
+                  {activeRoutine.type === "eye"
+                    ? "Pause yeux"
+                    : activeRoutine.type === "stretch"
+                      ? "Étirements"
+                      : activeRoutine.type === "wake"
+                        ? "Routine Réveil"
+                        : "Routine Coucher"}
+                </div>
+                <div className={cn("mt-1 text-[13px] font-semibold", TEXT_MUTED)}>
+                  Étape {stepNo}/{totalSteps}
+                </div>
+              </div>
               <button
-                onClick={() => setActiveExercise(null)}
-                className="flex-1 py-2 rounded-lg bg-gray-200 text-gray-800 font-semibold"
+                onClick={stopRoutine}
+                className={cn("h-10 w-10 rounded-2xl flex items-center justify-center hover:bg-white/[0.10] transition", GLASS_SOFT)}
+                aria-label="Fermer"
               >
-                Arrêter
+                <X className="h-5 w-5 text-white/75" />
               </button>
+            </div>
 
-              <button
-                onClick={() => {
-                  // "Suivant" = recommence le même exercice (ou vous pouvez le supprimer si inutile)
-                  setActiveExercise((e) => (e ? { ...e, remaining: e.durationSec } : e));
-                  playBeep(activeExercise.type);
-                }}
-                className="flex-1 py-2 rounded-lg bg-blue-600 text-white font-semibold"
+            <div className="mt-6 flex items-center justify-center">
+              <div className="relative">
+                <div className={cn("absolute inset-0 rounded-full blur-3xl opacity-60", t.ring.replace("text-", "bg-") + "/20")} />
+                <ProgressRing pct={pct} size={160} stroke={10} glowClass={t.ring} />
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <div className={cn("text-[44px] font-semibold leading-none", TEXT_PRIMARY)}>
+                    {activeRoutine.remainingSec}s
+                  </div>
+                  <div className={cn("mt-2 text-[13px] font-semibold", TEXT_MUTED)}>
+                    {activeRoutine.paused ? "En pause" : "En cours"}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6">
+              <div className={cn("text-[18px] font-semibold", TEXT_PRIMARY)}>
+                {step?.name ?? "Exercice"}
+              </div>
+              <div className={cn("mt-2 text-[13px] leading-snug", TEXT_SECONDARY)}>
+                {step?.desc ?? ""}
+              </div>
+            </div>
+
+            <div className="mt-6 grid grid-cols-3 gap-3">
+              <GlassButton
+                onClick={toggleRoutinePause}
+                className="text-center"
+                title={activeRoutine.paused ? "Reprendre" : "Pause"}
               >
-                Refaire
-              </button>
+                <div className="flex items-center justify-center gap-2">
+                  {activeRoutine.paused ? <Play className="h-4 w-4 text-white/85" /> : <Pause className="h-4 w-4 text-white/85" />}
+                  <span className={cn("text-[13px] font-semibold", TEXT_PRIMARY)}>
+                    {activeRoutine.paused ? "Reprendre" : "Pause"}
+                  </span>
+                </div>
+              </GlassButton>
+
+              <GlassButton onClick={skipStep} className="text-center" title="Passer">
+                <div className="flex items-center justify-center gap-2">
+                  <span className={cn("text-[13px] font-semibold", TEXT_PRIMARY)}>Passer</span>
+                </div>
+              </GlassButton>
+
+              <GlassButton onClick={finishRoutineNow} className="text-center" title="Terminer">
+                <div className="flex items-center justify-center gap-2">
+                  <Check className="h-4 w-4 text-white/85" />
+                  <span className={cn("text-[13px] font-semibold", TEXT_PRIMARY)}>Terminer</span>
+                </div>
+              </GlassButton>
             </div>
           </div>
         </div>
-      )}
+      </div>
+    );
+  };
 
-      {/* Settings modal */}
-      {showSettings && (
-        <div className="fixed inset-0 bg-black/50 flex items-end z-50" onClick={() => setShowSettings(false)}>
-          <div
-            className={`${darkMode ? "bg-gray-900 text-gray-100" : "bg-white"} rounded-t-3xl w-full max-w-md mx-auto p-6`}
-            onClick={(e) => e.stopPropagation()}
+  /* =========================
+   * Notifications cards (glass)
+   * ========================= */
+  const NotifCard = ({ type }) => {
+    const title = type === "eye" ? "Pause yeux" : "Étirements";
+    const subtitle = type === "eye" ? "Reposez vos yeux 20 secondes" : "Bougez pendant 2 minutes";
+    const text = type === "eye" ? "Regardez au loin (~6 mètres)." : "Levez-vous et étirez-vous.";
+    const t = themeGlow(type);
+
+    return (
+      <div className="absolute top-4 left-4 right-4 z-50">
+        <div className={cn("rounded-[24px] p-5", GLASS)}>
+          <div className="flex items-start justify-between">
+            <div className="flex items-start gap-3">
+              <GlassIconPlate glow={t.glow}>{t.icon}</GlassIconPlate>
+              <div>
+                <div className={cn("text-[15px] font-semibold", TEXT_PRIMARY)}>{title}</div>
+                <div className={cn("mt-1 text-[13px]", TEXT_MUTED)}>{subtitle}</div>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowNotif(null)}
+              className={cn("h-10 w-10 rounded-2xl flex items-center justify-center hover:bg-white/[0.10] transition", GLASS_SOFT)}
+            >
+              <X className="h-5 w-5 text-white/75" />
+            </button>
+          </div>
+
+          <div className={cn("mt-3 text-[13px]", TEXT_SECONDARY)}>{text}</div>
+
+          <button
+            onClick={type === "eye" ? completeEyeBreak : completeStretch}
+            className={cn(
+              "mt-4 w-full rounded-2xl px-4 py-3 font-semibold text-[14px] transition",
+              "border border-white/10 bg-gradient-to-b from-white/[0.12] to-white/[0.06] hover:from-white/[0.16] hover:to-white/[0.08]"
+            )}
           >
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-bold">Paramètres</h3>
-              <button onClick={() => setShowSettings(false)}>
-                <X size={24} className={darkMode ? "text-gray-300" : "text-gray-400"} />
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <div className={`${darkMode ? "bg-gray-800" : "bg-gray-50"} rounded-xl p-4`}>
-                <label className="block text-sm font-semibold mb-2">Objectif d'hydratation</label>
-                <input
-                  type="range"
-                  min="6"
-                  max="12"
-                  value={waterGoal}
-                  onChange={(e) => setWaterGoal(Number(e.target.value))}
-                  className="w-full"
-                />
-                <p className={darkMode ? "text-gray-300 text-xs mt-1" : "text-gray-500 text-xs mt-1"}>
-                  {waterGoal} verres par jour
-                </p>
-              </div>
-
-              <div className={`${darkMode ? "bg-gray-800" : "bg-gray-50"} rounded-xl p-4`}>
-                <label className="block text-sm font-semibold mb-2">Fréquence pauses yeux</label>
-                <select
-                  className={`w-full p-2 border rounded-lg ${darkMode ? "bg-gray-900 border-gray-700" : "bg-white border-gray-200"}`}
-                  value={eyeBreakInterval}
-                  onChange={(e) => {
-                    const v = Number(e.target.value);
-                    setEyeBreakInterval(v);
-                    setEyeBreakTimer((t) => Math.min(t, v));
-                    playBeep("eye");
-                  }}
-                >
-                  <option value="1200">Toutes les 20 minutes</option>
-                  <option value="1800">Toutes les 30 minutes</option>
-                  <option value="2400">Toutes les 40 minutes</option>
-                </select>
-              </div>
-
-              <div className={`${darkMode ? "bg-gray-800" : "bg-gray-50"} rounded-xl p-4`}>
-                <label className="block text-sm font-semibold mb-2">Fréquence étirements</label>
-                <select
-                  className={`w-full p-2 border rounded-lg ${darkMode ? "bg-gray-900 border-gray-700" : "bg-white border-gray-200"}`}
-                  value={stretchInterval}
-                  onChange={(e) => {
-                    const v = Number(e.target.value);
-                    setStretchInterval(v);
-                    setStretchTimer((t) => Math.min(t, v));
-                    playBeep("stretch");
-                  }}
-                >
-                  <option value="2400">Toutes les 40 minutes</option>
-                  <option value="3600">Toutes les 60 minutes</option>
-                  <option value="5400">Toutes les 90 minutes</option>
-                </select>
-              </div>
-
-              <div className={`${darkMode ? "bg-gray-800" : "bg-gray-50"} rounded-xl p-4 flex items-center justify-between`}>
-                <div>
-                  <p className="font-semibold">Notifications sonores</p>
-                  <p className={darkMode ? "text-gray-300 text-xs" : "text-gray-500 text-xs"}>
-                    Bip discret en web (nécessite une interaction)
-                  </p>
-                </div>
-                <input
-                  type="checkbox"
-                  className="w-5 h-5"
-                  checked={soundEnabled}
-                  onChange={(e) => {
-                    setSoundEnabled(e.target.checked);
-                    // interaction => permet l'audio ensuite
-                    playBeep(e.target.checked ? "wake" : "sleep");
-                  }}
-                />
-              </div>
-
-              <div className={`${darkMode ? "bg-gray-800" : "bg-gray-50"} rounded-xl p-4 flex items-center justify-between`}>
-                <div>
-                  <p className="font-semibold">Mode sombre</p>
-                  <p className={darkMode ? "text-gray-300 text-xs" : "text-gray-500 text-xs"}>Interface en mode nuit</p>
-                </div>
-                <input
-                  type="checkbox"
-                  className="w-5 h-5"
-                  checked={darkMode}
-                  onChange={(e) => setDarkMode(e.target.checked)}
-                />
-              </div>
-            </div>
-          </div>
+            <span className={TEXT_PRIMARY}>C’est fait</span>
+          </button>
         </div>
-      )}
+      </div>
+    );
+  };
 
-      {/* Main content */}
-      <div className="pb-20">
+  /* =========================
+   * Render
+   * ========================= */
+  return (
+    <div className="min-h-screen w-full flex justify-center bg-[#070A12]">
+      {/* Background gradient + ambient blobs */}
+      <div className="fixed inset-0 bg-gradient-to-b from-[#070A12] via-[#0B1022] to-[#1A0B2E]" />
+      <div className="fixed inset-0 pointer-events-none">
+        <div className="absolute -top-24 -left-16 h-72 w-72 rounded-full bg-cyan-500/10 blur-3xl" />
+        <div className="absolute top-48 -right-24 h-80 w-80 rounded-full bg-violet-500/10 blur-3xl" />
+        <div className="absolute bottom-0 left-8 h-72 w-72 rounded-full bg-indigo-500/10 blur-3xl" />
+      </div>
+
+      <div className="relative w-full max-w-md">
+        {/* In-app Notifs */}
+        {showNotif === "eye" && <NotifCard type="eye" />}
+        {showNotif === "stretch" && <NotifCard type="stretch" />}
+
+        {/* Main content */}
         {activeTab === "home" && <HomeScreen />}
         {activeTab === "stats" && <StatsScreen />}
-      </div>
 
-      {/* Bottom nav */}
-      <div className={`${darkMode ? "bg-gray-900 border-gray-800" : "bg-white border-gray-200"} fixed bottom-0 left-0 right-0 max-w-md mx-auto border-t px-6 py-4`}>
-        <div className="flex justify-around items-center">
-          <button
-            onClick={() => setActiveTab("home")}
-            className={`flex flex-col items-center gap-1 transition-colors ${
-              activeTab === "home" ? "text-blue-600" : "text-gray-400"
-            }`}
-          >
-            <Home size={24} />
-            <span className="text-xs font-medium">Accueil</span>
-          </button>
+        {/* Bottom nav (glass) */}
+        <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto px-5 pb-5">
+          <div className={cn("rounded-[26px] px-6 py-4 flex items-center justify-around", GLASS)}>
+            <button
+              onClick={() => setActiveTab("home")}
+              className={cn(
+                "flex flex-col items-center gap-1 transition",
+                activeTab === "home" ? "text-white/90" : "text-white/55"
+              )}
+            >
+              <Home className="h-6 w-6" />
+              <span className="text-[11px] font-semibold">Accueil</span>
+            </button>
 
-          <button
-            onClick={() => setActiveTab("stats")}
-            className={`flex flex-col items-center gap-1 transition-colors ${
-              activeTab === "stats" ? "text-blue-600" : "text-gray-400"
-            }`}
-          >
-            <TrendingUp size={24} />
-            <span className="text-xs font-medium">Stats</span>
-          </button>
+            <button
+              onClick={() => setActiveTab("stats")}
+              className={cn(
+                "flex flex-col items-center gap-1 transition",
+                activeTab === "stats" ? "text-white/90" : "text-white/55"
+              )}
+            >
+              <TrendingUp className="h-6 w-6" />
+              <span className="text-[11px] font-semibold">Stats</span>
+            </button>
+
+            <button
+              onClick={() => setShowSettings(true)}
+              className={cn("flex flex-col items-center gap-1 transition", "text-white/55 hover:text-white/80")}
+            >
+              <Settings className="h-6 w-6" />
+              <span className="text-[11px] font-semibold">Réglages</span>
+            </button>
+          </div>
         </div>
+
+        {/* Exercise selection modal */}
+        <ExerciseModal />
+
+        {/* Routine player */}
+        <RoutinePlayer />
+
+        {/* Settings modal */}
+        {showSettings && (
+          <div className="fixed inset-0 z-50">
+            <div className="absolute inset-0 bg-black/55" onClick={() => setShowSettings(false)} />
+            <div className="absolute inset-x-0 bottom-0">
+              <div className={cn("mx-auto max-w-md rounded-t-[32px] p-6", GLASS, "border-b-0")}>
+                <div className="flex items-center justify-between">
+                  <div className={cn("text-[18px] font-semibold", TEXT_PRIMARY)}>Paramètres</div>
+                  <button
+                    onClick={() => setShowSettings(false)}
+                    className={cn("h-10 w-10 rounded-2xl flex items-center justify-center hover:bg-white/[0.10] transition", GLASS_SOFT)}
+                  >
+                    <X className="h-5 w-5 text-white/75" />
+                  </button>
+                </div>
+
+                <div className="mt-5 space-y-4">
+                  <div className={cn("rounded-[22px] p-4", GLASS_SOFT)}>
+                    <div className={cn("text-[13px] font-semibold", TEXT_SECONDARY)}>Objectif hydratation</div>
+                    <div className="mt-3 flex items-center gap-3">
+                      <input
+                        type="range"
+                        min="6"
+                        max="12"
+                        value={waterGoal}
+                        onChange={(e) => {
+                          setWaterGoal(Number(e.target.value));
+                          if (soundEnabled) playTone({ freq: 600, gain: 0.02 });
+                        }}
+                        className="w-full"
+                      />
+                      <div className={cn("min-w-[52px] text-right text-[13px] font-semibold", TEXT_PRIMARY)}>
+                        {waterGoal}
+                      </div>
+                    </div>
+                    <div className={cn("mt-2 text-[12px]", TEXT_MUTED)}>verres par jour</div>
+                  </div>
+
+                  <div className={cn("rounded-[22px] p-4", GLASS_SOFT)}>
+                    <div className={cn("text-[13px] font-semibold", TEXT_SECONDARY)}>Fréquence pauses yeux</div>
+                    <select
+                      className={cn(
+                        "mt-3 w-full rounded-2xl px-3 py-3 text-[13px] font-semibold",
+                        "bg-black/30 border border-white/10 text-white/85"
+                      )}
+                      value={eyeBreakInterval}
+                      onChange={(e) => {
+                        const v = Number(e.target.value);
+                        setEyeBreakInterval(v);
+                        setEyeBreakTimer((t) => Math.min(t, v));
+                        if (soundEnabled) playTone({ freq: 880, gain: 0.02 });
+                      }}
+                    >
+                      <option value="1200">Toutes les 20 minutes</option>
+                      <option value="1800">Toutes les 30 minutes</option>
+                      <option value="2400">Toutes les 40 minutes</option>
+                    </select>
+                  </div>
+
+                  <div className={cn("rounded-[22px] p-4", GLASS_SOFT)}>
+                    <div className={cn("text-[13px] font-semibold", TEXT_SECONDARY)}>Fréquence étirements</div>
+                    <select
+                      className={cn(
+                        "mt-3 w-full rounded-2xl px-3 py-3 text-[13px] font-semibold",
+                        "bg-black/30 border border-white/10 text-white/85"
+                      )}
+                      value={stretchInterval}
+                      onChange={(e) => {
+                        const v = Number(e.target.value);
+                        setStretchInterval(v);
+                        setStretchTimer((t) => Math.min(t, v));
+                        if (soundEnabled) playTone({ freq: 660, gain: 0.02 });
+                      }}
+                    >
+                      <option value="2400">Toutes les 40 minutes</option>
+                      <option value="3600">Toutes les 60 minutes</option>
+                      <option value="5400">Toutes les 90 minutes</option>
+                    </select>
+                  </div>
+
+                  <div className={cn("rounded-[22px] p-4 flex items-center justify-between", GLASS_SOFT)}>
+                    <div>
+                      <div className={cn("text-[13px] font-semibold", TEXT_SECONDARY)}>Sons</div>
+                      <div className={cn("mt-1 text-[12px]", TEXT_MUTED)}>
+                        Fonctionne après une interaction utilisateur (règle navigateur).
+                      </div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      className="h-5 w-5 accent-white"
+                      checked={soundEnabled}
+                      onChange={(e) => {
+                        setSoundEnabled(e.target.checked);
+                        playTone({ freq: e.target.checked ? 740 : 520, gain: 0.02 });
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setShowSettings(false)}
+                  className={cn(
+                    "mt-5 w-full rounded-2xl px-4 py-3 font-semibold text-[14px] transition",
+                    "border border-white/10 bg-gradient-to-b from-white/[0.12] to-white/[0.06] hover:from-white/[0.16] hover:to-white/[0.08]"
+                  )}
+                >
+                  <span className={TEXT_PRIMARY}>Fermer</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-/**
- * =========================
- * Small UI helpers
- * =========================
- */
-function RowStat({ icon, label, value, darkMode }) {
+/* =========================
+ * Shortcut tile (Neo Glass)
+ * ========================= */
+function ShortcutTile({ title, subtitle, icon, glow = "cyan", onClick }) {
+  const glowMap = {
+    cyan: "bg-cyan-400/20",
+    violet: "bg-violet-500/20",
+    emerald: "bg-emerald-500/20",
+    amber: "bg-amber-500/20",
+    indigo: "bg-indigo-500/20"
+  };
+
   return (
-    <div className="flex items-center justify-between">
+    <button
+      onClick={onClick}
+      className="group w-full rounded-[24px] border border-white/10 bg-white/[0.07] shadow-[0_18px_45px_rgba(0,0,0,0.35)] backdrop-blur-2xl p-4 text-left hover:bg-white/[0.10] transition active:scale-[0.99]"
+      type="button"
+    >
       <div className="flex items-center gap-3">
-        <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
-          {icon}
-        </div>
-        <span className={darkMode ? "text-gray-200" : "text-gray-700"}>{label}</span>
-      </div>
-      <span className={`font-semibold ${darkMode ? "text-gray-100" : "text-gray-800"}`}>{value}</span>
-    </div>
-  );
-}
-
-function NotifCard({ icon, title, subtitle, text, color, onClose, onDone }) {
-  const border =
-    color === "purple" ? "border-purple-500" : color === "green" ? "border-green-500" : "border-gray-300";
-  const btn =
-    color === "purple" ? "bg-purple-500 hover:bg-purple-600" : color === "green" ? "bg-green-500 hover:bg-green-600" : "bg-gray-600 hover:bg-gray-700";
-
-  return (
-    <div className={`absolute top-4 left-4 right-4 z-50 bg-white rounded-2xl shadow-2xl p-5 border-l-4 ${border}`}>
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
+        <div className="relative">
+          <div className={cn("absolute inset-0 rounded-full blur-2xl", glowMap[glow] ?? glowMap.cyan)} />
+          <div className="h-11 w-11 rounded-2xl border border-white/10 bg-white/[0.06] backdrop-blur-xl flex items-center justify-center">
             {icon}
           </div>
-          <div>
-            <h3 className="font-semibold text-gray-800">{title}</h3>
-            <p className="text-sm text-gray-600">{subtitle}</p>
-          </div>
         </div>
-        <button onClick={onClose}>
-          <X size={20} className="text-gray-400" />
-        </button>
+
+        <div className="min-w-0">
+          <div className="text-white/90 text-[16px] font-semibold leading-tight truncate">{title}</div>
+          <div className="mt-1 text-white/60 text-[13px] font-semibold leading-none truncate">{subtitle}</div>
+        </div>
       </div>
-
-      <p className="text-sm text-gray-600 mb-3">{text}</p>
-
-      <button
-        onClick={onDone}
-        className={`w-full ${btn} text-white py-2 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2`}
-      >
-        <Check size={18} />
-        C'est fait !
-      </button>
-    </div>
+    </button>
   );
 }
