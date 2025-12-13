@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Droplets,
   Eye,
@@ -753,10 +753,10 @@ export default function ZenhydratationApp() {
         <div className="flex items-start justify-between">
           <div>
             <div className={cn("text-[34px] font-semibold tracking-tight leading-tight", theme.textPrimary)}>
-              Zenhydratation
+              Zen et hydraté
             </div>
             <div className={cn("mt-1 text-[14px] font-medium", theme.textMuted)}>
-              Focus. Respire. Hydrate.
+              Pause. Respire. Hydrate.
             </div>
 
             <div className="mt-3 flex items-center gap-3">
