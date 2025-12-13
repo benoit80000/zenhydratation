@@ -871,27 +871,14 @@ export default function ZenhydratationApp() {
     const heroTheme = themeGlow(nextHero.type);
 
     return (
-      <div className="px-5 pb-24 pt-6">
-        {/* Header */}
-        <div className="flex items-start justify-between">
+      <div className="p-6">
+        <div className="flex items-center justify-between mb-4">
           <div>
-            <div className={cn("text-[34px] font-semibold tracking-tight leading-tight", theme.textPrimary)}>
-              Zenhydratation
+            <div className={cn("text-[20px] font-bold", theme.textPrimary)}>
+              Zen et hydraté
             </div>
-            <div className={cn("mt-1 text-[14px] font-medium", theme.textMuted)}>
-              Focus. Respire. Hydrate.
-            </div>
-
-            <div className="mt-3 flex items-center gap-3">
-              <div className={cn("rounded-2xl px-4 py-2", theme.cardSoft)}>
-                <span className={cn("text-[13px] font-semibold", theme.textSecondary)}>🔥 Série</span>{" "}
-                <span className={cn("text-[13px] font-semibold", theme.textPrimary)}>{streak}j</span>
-              </div>
-
-              <div className={cn("rounded-2xl px-4 py-2", theme.cardSoft)}>
-                <span className={cn("text-[13px] font-semibold", theme.textSecondary)}>Mode</span>{" "}
-                <span className={cn("text-[13px] font-semibold", theme.textPrimary)}>Offline</span>
-              </div>
+            <div className={cn("text-[13px] mt-1", theme.textSecondary)}>
+              Pause, Respiration et Hydratation pour prendre soin de son corps et de son esprit.
             </div>
           </div>
 
@@ -1692,7 +1679,7 @@ export default function ZenhydratationApp() {
               className={cn(
                 "mt-5 w-full rounded-2xl px-4 py-3 font-semibold text-[14px] transition",
                 theme.id === "neo"
-                  ? "border border-white/10 bg-gradient-to-b from-white/[0.12] to-white/[0.06] hover:from-white/[0.16] hover:to-white/[0.08]"
+                  ? "border border-white/10 bg-gradient-to-b from-white/[0.12] to-white/[0.06] hover:from-white/[0.16] hover:to-white/[0.08"
                   : "border border-black/10 bg-black/[0.03] hover:bg-black/[0.05]"
               )}
             >
@@ -1818,29 +1805,46 @@ function ShortcutTile({ title, subtitle, icon, glow = "cyan", theme, onClick }) 
 /* =========================
  * Avatar mood
  * ========================= */
+/* =========================
+ * Avatar mood (emoji homme/femme + état qui évolue)
+ * ========================= */
 function AvatarMood({ theme, avatar, energyScore }) {
-  const mood = energyScore < 35 ? "tired" : energyScore < 70 ? "ok" : "good";
+  const person = avatar === "male" ? "👨" : "👩";
 
-  const face = mood === "tired" ? "(-_-)" : mood === "ok" ? "(•‿•)" : "(^_^)";
-  const aura =
-    mood === "tired" ? "bg-rose-500/15"
-    : mood === "ok" ? "bg-amber-500/15"
-    : "bg-emerald-500/15";
+  // 3 paliers (cohérents avec votre UI actuelle <35 / <70 / >=70)
+  const mood =
+    energyScore < 35
+      ? { key: "tired", label: "Fatigué", emoji: "😴", aura: "bg-rose-500/15" }
+      : energyScore < 70
+        ? { key: "ok", label: "En amélioration", emoji: "🙂", aura: "bg-amber-500/15" }
+        : { key: "good", label: "En forme", emoji: "😄", aura: "bg-emerald-500/15" };
 
-  const label = avatar === "male" ? "Homme" : "Femme";
+  const genderLabel = avatar === "male" ? "Homme" : "Femme";
 
   return (
     <div className="relative">
-      <div className={cn("absolute inset-0 rounded-full blur-2xl", aura)} />
-      <div className={cn("h-20 w-20 rounded-[26px] flex flex-col items-center justify-center", theme.cardSoft)}>
-        <div className={cn("text-[11px] font-semibold", theme.textMuted)}>{label}</div>
-        <div className={cn("mt-1 text-[22px] font-semibold", theme.textPrimary)}>
-          {face}
+      <div className={cn("absolute inset-0 rounded-full blur-2xl", mood.aura)} />
+      <div
+        className={cn(
+          "h-20 w-20 rounded-[26px] flex flex-col items-center justify-center",
+          theme.cardSoft
+        )}
+        aria-label={`Avatar ${genderLabel}, ${mood.label}`}
+        title={`${genderLabel} • ${mood.label}`}
+      >
+        <div className={cn("text-[11px] font-semibold", theme.textMuted)}>
+          {genderLabel}
+        </div>
+
+        <div className={cn("mt-1 text-[26px] font-semibold", theme.textPrimary)} style={{ lineHeight: 1 }}>
+          <span aria-hidden="true">{person}</span>{" "}
+          <span aria-hidden="true">{mood.emoji}</span>
         </div>
       </div>
     </div>
   );
 }
+
 
 /* =========================
  * Water glasses (progress fill + long press undo + bubbles)
