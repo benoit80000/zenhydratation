@@ -1,5 +1,5 @@
 import { Clock } from "./components/Clock";
-
+import ZenhydratationApp from "./ZenhydratationApp.jsx";
 export default function App() {
   return (
     <div style={{ minHeight: "100vh" }}>
