@@ -27,23 +27,6 @@ import {
 
 import DealsPage from "./DealsPage";
 
-/**
- * ==========================================================
- * ZenhydratationApp.jsx (Vercel-safe)
- * - 3 thèmes : neo (Neo Glass), classic, wellness
- * - Réglages via onglet Réglages (bottom nav)
- * - Offline: localStorage (historique 30j)
- * - Hydratation: ml (source de vérité), verres avec remplissage progressif
- * - Appui long sur un verre = annuler (retirer une dose)
- * - Bulles optionnelles
- * - Avatar femme/homme + enfant (fille/garçon) + énergie
- *
- * FIX:
- * - Survol tuiles: transition-transform (évite clignotement en hover)
- * - workTime: incrément “batch” (10s) pour réduire re-render GPU (optionnel mais activé)
- * ==========================================================
- */
-
 /* =========================
  * Config Bons Plans (JSON distant)
  * ========================= */
@@ -818,9 +801,9 @@ export default function ZenhydratationApp() {
       <div className="p-6">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <div className={cn("text-[20px] font-bold", theme.textPrimary)}>Zen et hydraté</div>
+            <div className={cn("text-[20px] font-bold", theme.textPrimary)}>HydraZen</div>
             <div className={cn("text-[13px] mt-1", theme.textSecondary)}>
-              Pause, Respiration et Hydratation pour prendre soin de son corps et de son esprit.
+              Hydratation, respiration, pauses yeux & étirements — pour un esprit clair et un corps léger.
             </div>
           </div>
 
