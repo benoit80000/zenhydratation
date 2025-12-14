@@ -332,357 +332,6 @@ function SurfaceButton({ children, onClick, className, title, theme, type = "but
 /* =========================
  * Component
  * ========================= */
-
-
-/* =========================
- * Screens (memoized to prevent flicker)
- * ========================= */
-
-const HomeScreen = React.memo(({
-  theme,
-  streak,
-  avatar,
-  energyScore,
-  waterMl,
-  dailyGoalMl,
-  waterCount,
-  hydrationPct,
-  cupMl,
-  addWater,
-  removeWater,
-  bubblesEnabled,
-  setBubblesEnabled,
-  eyeBreakTimer,
-  stretchTimer,
-  formatTime,
-  setShowExercise,
-  exercises,
-  startQueue,
-  todayStats,
-}) => {
-  return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <div className={cn("text-[20px] font-bold", theme.textPrimary)}>Zen et hydraté</div>
-          <div className={cn("text-[13px] mt-1", theme.textSecondary)}>
-            Pause, Respiration et Hydratation pour prendre soin de son corps et de son esprit.
-          </div>
-        </div>
-
-        <button
-          onClick={() => setIsPaused((p) => !p)}
-          className={cn(
-            "h-11 w-11 rounded-2xl flex items-center justify-center transition",
-            theme.cardSoft,
-            theme.id === "neo" ? "hover:bg-white/[0.10]" : "hover:bg-black/[0.03]"
-          )}
-          title={isPaused ? "Reprendre" : "Pause"}
-          aria-label={isPaused ? "Reprendre" : "Pause"}
-        >
-          {isPaused ? (
-            <Play className={cn("h-5 w-5", theme.id === "neo" ? "text-white/85" : "text-gray-700")} />
-          ) : (
-            <Pause className={cn("h-5 w-5", theme.id === "neo" ? "text-white/85" : "text-gray-700")} />
-          )}
-        </button>
-      </div>
-
-      {/* NOTE: Hero supprimée */}
-
-      {/* Energy / Avatar */}
-      <div className={cn("mt-6 rounded-[28px] p-6", theme.card)}>
-        <div className="flex items-center gap-4">
-          <AvatarMood theme={theme} avatar={avatar} energyScore={energyScore} />
-          <div className="flex-1">
-            <div className={cn("text-[16px] font-semibold", theme.textPrimary)}>Énergie</div>
-            <div className={cn("mt-1 text-[13px]", theme.textMuted)}>
-              {energyScore < 35 ? "Fatigue élevée" : energyScore < 70 ? "En amélioration" : "Bonne forme"}
-            </div>
-
-            <div className={cn("mt-3 h-3 rounded-full overflow-hidden", theme.id === "neo" ? "bg-white/10" : "bg-black/10")}>
-              <div
-                className={cn(
-                  "h-full rounded-full transition-[width] duration-700 ease-out",
-                  theme.id === "neo"
-                    ? "bg-gradient-to-r from-rose-300/70 via-amber-300/70 to-emerald-300/70"
-                    : "bg-gradient-to-r from-rose-400/70 via-amber-400/70 to-emerald-400/70"
-                )}
-                style={{ width: `${energyScore}%` }}
-              />
-            </div>
-
-            <div className={cn("mt-2 text-[12px]", theme.textMuted)}>
-              Hydratation + routines = récupération progressive.
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Hydratation */}
-      <div className={cn("mt-6 rounded-[28px] p-6", theme.card)}>
-        <div className="flex items-end justify-between">
-          <div className={cn("text-[28px] font-semibold leading-none", theme.textPrimary)}>Hydratation</div>
-          <div className={cn("text-[16px] font-semibold", theme.textSecondary)}>
-            {waterMl} / {dailyGoalMl} ml
-          </div>
-        </div>
-
-        <div className={cn("mt-2 text-[12px]", theme.textMuted)}>
-          Dose: {cupMl}ml • {waterCount} dose{waterCount > 1 ? "s" : ""} • {Math.max(0, Math.min(100, hydrationPct))}% objectif
-        </div>
-
-        <div className="mt-5">
-          <WaterGlasses
-            totalMl={waterMl}
-            goalMl={dailyGoalMl}
-            cupMl={cupMl}
-            onAdd={addWater}
-            onRemove={removeWater}
-            bubblesEnabled={bubblesEnabled}
-            theme={theme}
-            size="md"
-          />
-
-          <button
-            onClick={addWater}
-            className={cn(
-              "mt-5 w-full rounded-2xl px-4 py-3 font-semibold text-[14px] transition",
-              theme.id === "neo"
-                ? "border border-white/10 bg-gradient-to-b from-white/[0.12] to-white/[0.06] hover:from-white/[0.16] hover:to-white/[0.08]"
-                : "border border-black/10 bg-black/[0.03] hover:bg-black/[0.05]"
-            )}
-          >
-            <span className={theme.textPrimary}>+ Ajouter une dose</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Exercices (format large pour toutes les tuiles) */}
-      <div className="mt-7">
-        <div className={cn("text-[28px] font-semibold", theme.textPrimary)}>Exercices</div>
-
-        <div className="mt-5 space-y-4">
-          <LargeActionTile
-            theme={theme}
-            title="Yeux"
-            subtitle={`Prochaine pause dans ${formatTime(eyeBreakTimer)}`}
-            glow="violet"
-            icon={
-              theme.id === "neo" ? <Eye className="h-6 w-6 text-white/85" /> : <Eye className="h-6 w-6 text-violet-600" />
-            }
-            onClick={() => setShowExercise("eye")}
-          />
-
-          <LargeActionTile
-            theme={theme}
-            title="Étirements"
-            subtitle={`Prochain dans ${formatTime(stretchTimer)}`}
-            glow="emerald"
-            icon={
-              theme.id === "neo"
-                ? <Activity className="h-6 w-6 text-white/85" />
-                : <Activity className="h-6 w-6 text-emerald-600" />
-            }
-            onClick={() => setShowExercise("stretch")}
-          />
-
-          <LargeActionTile
-            theme={theme}
-            title="Réveil"
-            subtitle={`${exercises.wake.length} étapes`}
-            glow="amber"
-            icon={
-              theme.id === "neo" ? <Sun className="h-6 w-6 text-white/85" /> : <Sun className="h-6 w-6 text-amber-600" />
-            }
-            onClick={() => startQueue("wake", exercises.wake)}
-          />
-
-          <LargeActionTile
-            theme={theme}
-            title="Coucher"
-            subtitle={`${exercises.sleep.length} étapes`}
-            glow="indigo"
-            icon={
-              theme.id === "neo" ? <Moon className="h-6 w-6 text-white/85" /> : <Moon className="h-6 w-6 text-indigo-600" />
-            }
-            onClick={() => startQueue("sleep", exercises.sleep)}
-          />
-        </div>
-      </div>
-
-      <div className={cn("mt-7 text-[14px] leading-snug", theme.textMuted)}>
-        Aujourd&apos;hui: {todayStats.waterMl}ml • Yeux {todayStats.eyeBreaks} • Étirements {todayStats.stretches}
-        <br />
-        Réveil {todayStats.wakeRoutines} • Coucher {todayStats.sleepRoutines}
-      </div>
-    </div>
-  );
-});
-
-const StatsScreen = React.memo(({
-  theme,
-  todayStats,
-  streak,
-  sum,
-  window7,
-  window30,
-  chart7,
-  chart30,
-  cupMl,
-  labelsById,
-}) => {
-  const workH = Math.floor(todayStats.workTime / 3600);
-  const workM = Math.floor((todayStats.workTime % 3600) / 60);
-
-  const renderDetail = (groupKey, title) => {
-    const entries = Object.entries(todayStats.details?.[groupKey] ?? {});
-    return (
-      <div className={cn("rounded-[24px] p-5", theme.cardSoft)}>
-        <div className={cn("text-[16px] font-semibold", theme.textPrimary)}>{title}</div>
-        {entries.length === 0 ? (
-          <div className={cn("mt-2 text-[13px]", theme.textMuted)}>Aucune donnée.</div>
-        ) : (
-          <div className="mt-3 space-y-2">
-            {entries.map(([id, count]) => (
-              <div key={id} className="flex items-center justify-between">
-                <div className={cn("text-[13px] font-medium", theme.textSecondary)}>{labelsById[id] ?? id}</div>
-                <div className={cn("text-[13px] font-semibold", theme.textPrimary)}>{count}</div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  const tooltipStyle = {
-    background: theme.tooltip.background,
-    border: theme.tooltip.border,
-    borderRadius: 14,
-    color: theme.tooltip.color
-  };
-
-  return (
-    <div className="px-5 pb-24 pt-6 space-y-6">
-      <div className="flex items-end justify-between">
-        <div className={cn("text-[28px] font-semibold", theme.textPrimary)}>Statistiques</div>
-        <div className={cn("rounded-2xl px-4 py-2", theme.cardSoft)}>
-          <span className={cn("text-[13px] font-semibold", theme.textSecondary)}>🔥 {streak}j</span>
-        </div>
-      </div>
-
-      <div className={cn("rounded-[28px] p-6", theme.card)}>
-        <div className="flex items-center gap-3">
-          <Clock className={cn("h-6 w-6", theme.id === "neo" ? "text-white/80" : "text-gray-700")} />
-          <div>
-            <div className={cn("text-[13px] font-semibold", theme.textMuted)}>
-              Temps de travail aujourd&apos;hui
-            </div>
-            <div className={cn("text-[26px] font-semibold", theme.textPrimary)}>
-              {workH}h {workM}m
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className={cn("rounded-[28px] p-6", theme.card)}>
-        <div className="flex items-center justify-between">
-          <div className={cn("text-[16px] font-semibold", theme.textPrimary)}>Graphique 7 jours</div>
-          <div className={cn("text-[13px] font-semibold", theme.textMuted)}>
-            Eau {Math.round(sum(window7, "waterMl") / 100) / 10}L
-          </div>
-        </div>
-
-        <div className="mt-4" style={{ width: "100%", height: 260 }}>
-          {chart7.length === 0 ? (
-            <div className={cn("text-[13px]", theme.textMuted)}>Aucune donnée pour l’instant.</div>
-          ) : (
-            <ResponsiveContainer>
-              <BarChart data={chart7}>
-                <XAxis
-                  dataKey="day"
-                  tick={{
-                    fill: theme.id === "neo" ? "rgba(255,255,255,0.65)" : "rgba(15,23,42,0.60)",
-                    fontSize: 12
-                  }}
-                />
-                <YAxis
-                  allowDecimals={false}
-                  tick={{
-                    fill: theme.id === "neo" ? "rgba(255,255,255,0.65)" : "rgba(15,23,42,0.60)",
-                    fontSize: 12
-                  }}
-                />
-                <Tooltip contentStyle={tooltipStyle} />
-                <Legend
-                  wrapperStyle={{
-                    color: theme.id === "neo" ? "rgba(255,255,255,0.7)" : "rgba(15,23,42,0.65)"
-                  }}
-                />
-                <Bar dataKey="water" name={`Eau (doses ${cupMl}ml)`} fill="rgba(34, 211, 238, 0.60)" />
-                <Bar dataKey="eye" name="Yeux" fill="rgba(167, 139, 250, 0.60)" />
-                <Bar dataKey="stretch" name="Étirements" fill="rgba(52, 211, 153, 0.60)" />
-                <Bar dataKey="wake" name="Réveil" fill="rgba(251, 191, 36, 0.60)" />
-                <Bar dataKey="sleep" name="Coucher" fill="rgba(129, 140, 248, 0.60)" />
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </div>
-      </div>
-
-      <div className={cn("rounded-[28px] p-6", theme.card)}>
-        <div className="flex items-center justify-between">
-          <div className={cn("text-[16px] font-semibold", theme.textPrimary)}>Graphique 30 jours</div>
-          <div className={cn("text-[13px] font-semibold", theme.textMuted)}>Jours: {window30.length}</div>
-        </div>
-
-        <div className="mt-4" style={{ width: "100%", height: 260 }}>
-          {chart30.length === 0 ? (
-            <div className={cn("text-[13px]", theme.textMuted)}>Aucune donnée sur 30 jours.</div>
-          ) : (
-            <ResponsiveContainer>
-              <BarChart data={chart30}>
-                <XAxis
-                  dataKey="day"
-                  tick={{
-                    fill: theme.id === "neo" ? "rgba(255,255,255,0.65)" : "rgba(15,23,42,0.60)",
-                    fontSize: 12
-                  }}
-                />
-                <YAxis
-                  allowDecimals={false}
-                  tick={{
-                    fill: theme.id === "neo" ? "rgba(255,255,255,0.65)" : "rgba(15,23,42,0.60)",
-                    fontSize: 12
-                  }}
-                />
-                <Tooltip contentStyle={tooltipStyle} />
-                <Legend
-                  wrapperStyle={{
-                    color: theme.id === "neo" ? "rgba(255,255,255,0.7)" : "rgba(15,23,42,0.65)"
-                  }}
-                />
-                <Bar dataKey="water" name={`Eau (doses ${cupMl}ml)`} fill="rgba(34, 211, 238, 0.55)" />
-                <Bar dataKey="eye" name="Yeux" fill="rgba(167, 139, 250, 0.55)" />
-                <Bar dataKey="stretch" name="Étirements" fill="rgba(52, 211, 153, 0.55)" />
-                <Bar dataKey="wake" name="Réveil" fill="rgba(251, 191, 36, 0.55)" />
-                <Bar dataKey="sleep" name="Coucher" fill="rgba(129, 140, 248, 0.55)" />
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4">
-        {renderDetail("eye", "Détails aujourd’hui — Yeux")}
-        {renderDetail("stretch", "Détails aujourd’hui — Étirements")}
-        {renderDetail("wake", "Détails aujourd’hui — Réveil")}
-        {renderDetail("sleep", "Détails aujourd’hui — Coucher")}
-      </div>
-    </div>
-  );
-});
 export default function ZenhydratationApp() {
   const [activeTab, setActiveTab] = useState("home");
 
@@ -1226,6 +875,319 @@ export default function ZenhydratationApp() {
   /* =========================
    * Screens
    * ========================= */
+  const HomeScreen = () => {
+    return (
+      <div className="p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <div className={cn("text-[20px] font-bold", theme.textPrimary)}>Zen et hydraté</div>
+            <div className={cn("text-[13px] mt-1", theme.textSecondary)}>
+              Pause, Respiration et Hydratation pour prendre soin de son corps et de son esprit.
+            </div>
+          </div>
+
+          <button
+            onClick={() => setIsPaused((p) => !p)}
+            className={cn(
+              "h-11 w-11 rounded-2xl flex items-center justify-center transition",
+              theme.cardSoft,
+              theme.id === "neo" ? "hover:bg-white/[0.10]" : "hover:bg-black/[0.03]"
+            )}
+            title={isPaused ? "Reprendre" : "Pause"}
+            aria-label={isPaused ? "Reprendre" : "Pause"}
+          >
+            {isPaused ? (
+              <Play className={cn("h-5 w-5", theme.id === "neo" ? "text-white/85" : "text-gray-700")} />
+            ) : (
+              <Pause className={cn("h-5 w-5", theme.id === "neo" ? "text-white/85" : "text-gray-700")} />
+            )}
+          </button>
+        </div>
+
+        {/* NOTE: Hero supprimée */}
+
+        {/* Energy / Avatar */}
+        <div className={cn("mt-6 rounded-[28px] p-6", theme.card)}>
+          <div className="flex items-center gap-4">
+            <AvatarMood theme={theme} avatar={avatar} energyScore={energyScore} />
+            <div className="flex-1">
+              <div className={cn("text-[16px] font-semibold", theme.textPrimary)}>Énergie</div>
+              <div className={cn("mt-1 text-[13px]", theme.textMuted)}>
+                {energyScore < 35 ? "Fatigue élevée" : energyScore < 70 ? "En amélioration" : "Bonne forme"}
+              </div>
+
+              <div className={cn("mt-3 h-3 rounded-full overflow-hidden", theme.id === "neo" ? "bg-white/10" : "bg-black/10")}>
+                <div
+                  className={cn(
+                    "h-full rounded-full transition-[width] duration-700 ease-out",
+                    theme.id === "neo"
+                      ? "bg-gradient-to-r from-rose-300/70 via-amber-300/70 to-emerald-300/70"
+                      : "bg-gradient-to-r from-rose-400/70 via-amber-400/70 to-emerald-400/70"
+                  )}
+                  style={{ width: `${energyScore}%` }}
+                />
+              </div>
+
+              <div className={cn("mt-2 text-[12px]", theme.textMuted)}>
+                Hydratation + routines = récupération progressive.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Hydratation */}
+        <div className={cn("mt-6 rounded-[28px] p-6", theme.card)}>
+          <div className="flex items-end justify-between">
+            <div className={cn("text-[28px] font-semibold leading-none", theme.textPrimary)}>Hydratation</div>
+            <div className={cn("text-[16px] font-semibold", theme.textSecondary)}>
+              {waterMl} / {dailyGoalMl} ml
+            </div>
+          </div>
+
+          <div className={cn("mt-2 text-[12px]", theme.textMuted)}>
+            Dose: {cupMl}ml • {waterCount} dose{waterCount > 1 ? "s" : ""} • {Math.max(0, Math.min(100, hydrationPct))}% objectif
+          </div>
+
+          <div className="mt-5">
+            <WaterGlasses
+              totalMl={waterMl}
+              goalMl={dailyGoalMl}
+              cupMl={cupMl}
+              onAdd={addWater}
+              onRemove={removeWater}
+              bubblesEnabled={bubblesEnabled}
+              theme={theme}
+              size="md"
+            />
+
+            <button
+              onClick={addWater}
+              className={cn(
+                "mt-5 w-full rounded-2xl px-4 py-3 font-semibold text-[14px] transition",
+                theme.id === "neo"
+                  ? "border border-white/10 bg-gradient-to-b from-white/[0.12] to-white/[0.06] hover:from-white/[0.16] hover:to-white/[0.08]"
+                  : "border border-black/10 bg-black/[0.03] hover:bg-black/[0.05]"
+              )}
+            >
+              <span className={theme.textPrimary}>+ Ajouter une dose</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Exercices (format large pour toutes les tuiles) */}
+        <div className="mt-7">
+          <div className={cn("text-[28px] font-semibold", theme.textPrimary)}>Exercices</div>
+
+          <div className="mt-5 space-y-4">
+            <LargeActionTile
+              theme={theme}
+              title="Yeux"
+              subtitle={`Prochaine pause dans ${formatTime(eyeBreakTimer)}`}
+              glow="violet"
+              icon={
+                theme.id === "neo" ? <Eye className="h-6 w-6 text-white/85" /> : <Eye className="h-6 w-6 text-violet-600" />
+              }
+              onClick={() => setShowExercise("eye")}
+            />
+
+            <LargeActionTile
+              theme={theme}
+              title="Étirements"
+              subtitle={`Prochain dans ${formatTime(stretchTimer)}`}
+              glow="emerald"
+              icon={
+                theme.id === "neo"
+                  ? <Activity className="h-6 w-6 text-white/85" />
+                  : <Activity className="h-6 w-6 text-emerald-600" />
+              }
+              onClick={() => setShowExercise("stretch")}
+            />
+
+            <LargeActionTile
+              theme={theme}
+              title="Réveil"
+              subtitle={`${exercises.wake.length} étapes`}
+              glow="amber"
+              icon={
+                theme.id === "neo" ? <Sun className="h-6 w-6 text-white/85" /> : <Sun className="h-6 w-6 text-amber-600" />
+              }
+              onClick={() => startQueue("wake", exercises.wake)}
+            />
+
+            <LargeActionTile
+              theme={theme}
+              title="Coucher"
+              subtitle={`${exercises.sleep.length} étapes`}
+              glow="indigo"
+              icon={
+                theme.id === "neo" ? <Moon className="h-6 w-6 text-white/85" /> : <Moon className="h-6 w-6 text-indigo-600" />
+              }
+              onClick={() => startQueue("sleep", exercises.sleep)}
+            />
+          </div>
+        </div>
+
+        <div className={cn("mt-7 text-[14px] leading-snug", theme.textMuted)}>
+          Aujourd&apos;hui: {todayStats.waterMl}ml • Yeux {todayStats.eyeBreaks} • Étirements {todayStats.stretches}
+          <br />
+          Réveil {todayStats.wakeRoutines} • Coucher {todayStats.sleepRoutines}
+        </div>
+      </div>
+    );
+  };
+
+  const StatsScreen = () => {
+    const workH = Math.floor(todayStats.workTime / 3600);
+    const workM = Math.floor((todayStats.workTime % 3600) / 60);
+
+    const renderDetail = (groupKey, title) => {
+      const entries = Object.entries(todayStats.details?.[groupKey] ?? {});
+      return (
+        <div className={cn("rounded-[24px] p-5", theme.cardSoft)}>
+          <div className={cn("text-[16px] font-semibold", theme.textPrimary)}>{title}</div>
+          {entries.length === 0 ? (
+            <div className={cn("mt-2 text-[13px]", theme.textMuted)}>Aucune donnée.</div>
+          ) : (
+            <div className="mt-3 space-y-2">
+              {entries.map(([id, count]) => (
+                <div key={id} className="flex items-center justify-between">
+                  <div className={cn("text-[13px] font-medium", theme.textSecondary)}>{labelsById[id] ?? id}</div>
+                  <div className={cn("text-[13px] font-semibold", theme.textPrimary)}>{count}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    const tooltipStyle = {
+      background: theme.tooltip.background,
+      border: theme.tooltip.border,
+      borderRadius: 14,
+      color: theme.tooltip.color
+    };
+
+    return (
+      <div className="px-5 pb-24 pt-6 space-y-6">
+        <div className="flex items-end justify-between">
+          <div className={cn("text-[28px] font-semibold", theme.textPrimary)}>Statistiques</div>
+          <div className={cn("rounded-2xl px-4 py-2", theme.cardSoft)}>
+            <span className={cn("text-[13px] font-semibold", theme.textSecondary)}>🔥 {streak}j</span>
+          </div>
+        </div>
+
+        <div className={cn("rounded-[28px] p-6", theme.card)}>
+          <div className="flex items-center gap-3">
+            <Clock className={cn("h-6 w-6", theme.id === "neo" ? "text-white/80" : "text-gray-700")} />
+            <div>
+              <div className={cn("text-[13px] font-semibold", theme.textMuted)}>
+                Temps de travail aujourd&apos;hui
+              </div>
+              <div className={cn("text-[26px] font-semibold", theme.textPrimary)}>
+                {workH}h {workM}m
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className={cn("rounded-[28px] p-6", theme.card)}>
+          <div className="flex items-center justify-between">
+            <div className={cn("text-[16px] font-semibold", theme.textPrimary)}>Graphique 7 jours</div>
+            <div className={cn("text-[13px] font-semibold", theme.textMuted)}>
+              Eau {Math.round(sum(window7, "waterMl") / 100) / 10}L
+            </div>
+          </div>
+
+          <div className="mt-4" style={{ width: "100%", height: 260 }}>
+            {chart7.length === 0 ? (
+              <div className={cn("text-[13px]", theme.textMuted)}>Aucune donnée pour l’instant.</div>
+            ) : (
+              <ResponsiveContainer>
+                <BarChart data={chart7}>
+                  <XAxis
+                    dataKey="day"
+                    tick={{
+                      fill: theme.id === "neo" ? "rgba(255,255,255,0.65)" : "rgba(15,23,42,0.60)",
+                      fontSize: 12
+                    }}
+                  />
+                  <YAxis
+                    allowDecimals={false}
+                    tick={{
+                      fill: theme.id === "neo" ? "rgba(255,255,255,0.65)" : "rgba(15,23,42,0.60)",
+                      fontSize: 12
+                    }}
+                  />
+                  <Tooltip contentStyle={tooltipStyle} />
+                  <Legend
+                    wrapperStyle={{
+                      color: theme.id === "neo" ? "rgba(255,255,255,0.7)" : "rgba(15,23,42,0.65)"
+                    }}
+                  />
+                  <Bar dataKey="water" name={`Eau (doses ${cupMl}ml)`} fill="rgba(34, 211, 238, 0.60)" />
+                  <Bar dataKey="eye" name="Yeux" fill="rgba(167, 139, 250, 0.60)" />
+                  <Bar dataKey="stretch" name="Étirements" fill="rgba(52, 211, 153, 0.60)" />
+                  <Bar dataKey="wake" name="Réveil" fill="rgba(251, 191, 36, 0.60)" />
+                  <Bar dataKey="sleep" name="Coucher" fill="rgba(129, 140, 248, 0.60)" />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
+
+        <div className={cn("rounded-[28px] p-6", theme.card)}>
+          <div className="flex items-center justify-between">
+            <div className={cn("text-[16px] font-semibold", theme.textPrimary)}>Graphique 30 jours</div>
+            <div className={cn("text-[13px] font-semibold", theme.textMuted)}>Jours: {window30.length}</div>
+          </div>
+
+          <div className="mt-4" style={{ width: "100%", height: 260 }}>
+            {chart30.length === 0 ? (
+              <div className={cn("text-[13px]", theme.textMuted)}>Aucune donnée sur 30 jours.</div>
+            ) : (
+              <ResponsiveContainer>
+                <BarChart data={chart30}>
+                  <XAxis
+                    dataKey="day"
+                    tick={{
+                      fill: theme.id === "neo" ? "rgba(255,255,255,0.65)" : "rgba(15,23,42,0.60)",
+                      fontSize: 12
+                    }}
+                  />
+                  <YAxis
+                    allowDecimals={false}
+                    tick={{
+                      fill: theme.id === "neo" ? "rgba(255,255,255,0.65)" : "rgba(15,23,42,0.60)",
+                      fontSize: 12
+                    }}
+                  />
+                  <Tooltip contentStyle={tooltipStyle} />
+                  <Legend
+                    wrapperStyle={{
+                      color: theme.id === "neo" ? "rgba(255,255,255,0.7)" : "rgba(15,23,42,0.65)"
+                    }}
+                  />
+                  <Bar dataKey="water" name={`Eau (doses ${cupMl}ml)`} fill="rgba(34, 211, 238, 0.55)" />
+                  <Bar dataKey="eye" name="Yeux" fill="rgba(167, 139, 250, 0.55)" />
+                  <Bar dataKey="stretch" name="Étirements" fill="rgba(52, 211, 153, 0.55)" />
+                  <Bar dataKey="wake" name="Réveil" fill="rgba(251, 191, 36, 0.55)" />
+                  <Bar dataKey="sleep" name="Coucher" fill="rgba(129, 140, 248, 0.55)" />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4">
+          {renderDetail("eye", "Détails aujourd’hui — Yeux")}
+          {renderDetail("stretch", "Détails aujourd’hui — Étirements")}
+          {renderDetail("wake", "Détails aujourd’hui — Réveil")}
+          {renderDetail("sleep", "Détails aujourd’hui — Coucher")}
+        </div>
+      </div>
+    );
+  };
 
   /* =========================
    * Exercise selection modal
@@ -1713,40 +1675,8 @@ export default function ZenhydratationApp() {
         {showNotif === "eye" && <NotifCard type="eye" />}
         {showNotif === "stretch" && <NotifCard type="stretch" />}
 
-        {activeTab === "home" && <HomeScreen
-            theme={theme}
-            streak={streak}
-            avatar={avatar}
-            energyScore={energyScore}
-            waterMl={waterMl}
-            dailyGoalMl={dailyGoalMl}
-            waterCount={waterCount}
-            hydrationPct={hydrationPct}
-            cupMl={cupMl}
-            addWater={addWater}
-            removeWater={removeWater}
-            bubblesEnabled={bubblesEnabled}
-            setBubblesEnabled={setBubblesEnabled}
-            eyeBreakTimer={eyeBreakTimer}
-            stretchTimer={stretchTimer}
-            formatTime={formatTime}
-            setShowExercise={setShowExercise}
-            exercises={exercises}
-            startQueue={startQueue}
-            todayStats={todayStats}
-          />}
-        {activeTab === "stats" && <StatsScreen
-            theme={theme}
-            todayStats={todayStats}
-            streak={streak}
-            sum={sum}
-            window7={window7}
-            window30={window30}
-            chart7={chart7}
-            chart30={chart30}
-            cupMl={cupMl}
-            labelsById={labelsById}
-          />}
+        {activeTab === "home" && <HomeScreen />}
+        {activeTab === "stats" && <StatsScreen />}
 
         {/* Bons Plans = page dédiée (fichier séparé) */}
         {activeTab === "deals" && <DealsPage theme={theme} remoteUrl={DEALS_REMOTE_URL} />}
