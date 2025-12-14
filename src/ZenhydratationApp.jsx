@@ -29,20 +29,12 @@ import DealsPage from "./DealsPage";
 
 /**
  * ==========================================================
- * ZenhydratationApp.jsx (Vercel-safe)
- * - 3 thèmes : neo (Neo Glass), classic, wellness
- * - Réglages via onglet Réglages (bottom nav)
- * - Offline: localStorage (historique 30j)
- * - Hydratation: ml (source de vérité), verres avec remplissage progressif
- * - Appui long sur un verre = annuler (retirer une dose)
- * - Bulles optionnelles
- * - Avatar homme/femme + énergie (fatigue) qui s’améliore avec hydratation + routines
+ * ZenhydratationApp.jsx (Vercel-safe + Anti-flicker)
  *
- * MAJ:
- * - Suppression de la "Hero" (Pause yeux / Étirements) en haut
- * - Ajout onglet "Bons Plans" après Stats, rendu via DealsPage (fichier séparé)
- * - Remplacement "Raccourcis" => "Exercices"
- * - Tuiles Exercices en format large (plein largeur) pour toutes
+ * Correctif principal "clignotement":
+ * - workTime n'est plus dans todayStats (évite recréation d'un gros objet chaque seconde)
+ * - history/streak ne sont plus "set" à chaque tick: on calcule un history dérivé via useMemo
+ * - persistence history: uniquement au rollover de jour + quand l'app passe en arrière-plan
  * ==========================================================
  */
 
@@ -350,13 +342,16 @@ export default function ZenhydratationApp() {
   const [waterMl, setWaterMl] = useState(0);
 
   // avatar + bubbles
-  const [avatar, setAvatar] = useState("female"); // "female" | "male"
+const [avatar, setAvatar] = useState("female"); // "female" | "male" | "child"
   const [bubblesEnabled, setBubblesEnabled] = useState(true);
 
   // timers
   const [eyeBreakTimer, setEyeBreakTimer] = useState(1200);
   const [stretchTimer, setStretchTimer] = useState(3600);
   const [isPaused, setIsPaused] = useState(false);
+
+  // work time separated (anti-flicker)
+  const [workTimeSec, setWorkTimeSec] = useState(0);
 
   // modals
   const [showSettings, setShowSettings] = useState(false);
@@ -367,8 +362,7 @@ export default function ZenhydratationApp() {
   const [activeRoutine, setActiveRoutine] = useState(null);
 
   // history & stats
-  const [history, setHistory] = useState([]);
-  const [streak, setStreak] = useState(0);
+  const [historyBase, setHistoryBase] = useState([]); // <- n'inclut pas "today"
   const [todayStats, setTodayStats] = useState({
     dayKey: dayKey(),
     waterMl: 0,
@@ -376,7 +370,6 @@ export default function ZenhydratationApp() {
     stretches: 0,
     wakeRoutines: 0,
     sleepRoutines: 0,
-    workTime: 0,
     details: { eye: {}, stretch: {}, wake: {}, sleep: {} }
   });
 
@@ -386,90 +379,25 @@ export default function ZenhydratationApp() {
   const exercises = useMemo(
     () => ({
       eye: [
-        {
-          id: "eye-2020",
-          name: "Règle 20-20-20",
-          durationSec: 20,
-          desc: "Regardez un objet à ~6 mètres pendant 20 secondes."
-        },
-        {
-          id: "eye-blink",
-          name: "Clignements",
-          durationSec: 20,
-          desc: "Clignez lentement des yeux (10 fois environ)."
-        },
-        {
-          id: "eye-massage",
-          name: "Massage des yeux",
-          durationSec: 20,
-          desc: "Fermez les yeux et massez doucement les tempes."
-        }
+        { id: "eye-2020", name: "Règle 20-20-20", durationSec: 20, desc: "Regardez un objet à ~6 mètres pendant 20 secondes." },
+        { id: "eye-blink", name: "Clignements", durationSec: 20, desc: "Clignez lentement des yeux (10 fois environ)." },
+        { id: "eye-massage", name: "Massage des yeux", durationSec: 20, desc: "Fermez les yeux et massez doucement les tempes." }
       ],
       stretch: [
-        {
-          id: "st-neck",
-          name: "Rotation du cou",
-          durationSec: 30,
-          desc: "Tournez lentement la tête de gauche à droite."
-        },
-        {
-          id: "st-shoulders",
-          name: "Étirement des épaules",
-          durationSec: 30,
-          desc: "Roulez vos épaules en arrière puis en avant."
-        },
-        {
-          id: "st-arms",
-          name: "Étirement des bras",
-          durationSec: 30,
-          desc: "Tendez les bras, entrelacez les doigts, étirez doucement."
-        },
-        {
-          id: "st-back",
-          name: "Flexion du dos",
-          durationSec: 30,
-          desc: "Penchez-vous vers l'avant doucement (sans douleur)."
-        }
+        { id: "st-neck", name: "Rotation du cou", durationSec: 30, desc: "Tournez lentement la tête de gauche à droite." },
+        { id: "st-shoulders", name: "Étirement des épaules", durationSec: 30, desc: "Roulez vos épaules en arrière puis en avant." },
+        { id: "st-arms", name: "Étirement des bras", durationSec: 30, desc: "Tendez les bras, entrelacez les doigts, étirez doucement." },
+        { id: "st-back", name: "Flexion du dos", durationSec: 30, desc: "Penchez-vous vers l'avant doucement (sans douleur)." }
       ],
       wake: [
-        {
-          id: "wk-breath",
-          name: "Respiration énergisante",
-          durationSec: 60,
-          desc: "Inspirez profondément par le nez, expirez lentement."
-        },
-        {
-          id: "wk-mobility",
-          name: "Mobilité douce",
-          durationSec: 60,
-          desc: "Bougez cou/épaules/hanches, amplitude confortable."
-        },
-        {
-          id: "wk-posture",
-          name: "Activation posturale",
-          durationSec: 45,
-          desc: "Redressez-vous, omoplates basses, respiration calme."
-        }
+        { id: "wk-breath", name: "Respiration énergisante", durationSec: 60, desc: "Inspirez profondément par le nez, expirez lentement." },
+        { id: "wk-mobility", name: "Mobilité douce", durationSec: 60, desc: "Bougez cou/épaules/hanches, amplitude confortable." },
+        { id: "wk-posture", name: "Activation posturale", durationSec: 45, desc: "Redressez-vous, omoplates basses, respiration calme." }
       ],
       sleep: [
-        {
-          id: "sl-breath",
-          name: "Respiration calmante",
-          durationSec: 60,
-          desc: "Inspirez 4s, expirez 6s. Relâchez les épaules."
-        },
-        {
-          id: "sl-neck",
-          name: "Détente nuque/épaules",
-          durationSec: 45,
-          desc: "Relâchez nuque/épaules, micro-rotations très lentes."
-        },
-        {
-          id: "sl-scan",
-          name: "Scan corporel",
-          durationSec: 90,
-          desc: "Parcourez le corps et relâchez progressivement."
-        }
+        { id: "sl-breath", name: "Respiration calmante", durationSec: 60, desc: "Inspirez 4s, expirez 6s. Relâchez les épaules." },
+        { id: "sl-neck", name: "Détente nuque/épaules", durationSec: 45, desc: "Relâchez nuque/épaules, micro-rotations très lentes." },
+        { id: "sl-scan", name: "Scan corporel", durationSec: 90, desc: "Parcourez le corps et relâchez progressivement." }
       ]
     }),
     []
@@ -484,30 +412,49 @@ export default function ZenhydratationApp() {
   }, [exercises]);
 
   /* =========================
+   * History derived (history + today) + streak derived
+   * ========================= */
+  const history = useMemo(() => {
+    const current = todayStats.dayKey;
+    const without = (historyBase ?? []).filter((e) => e.dayKey !== current);
+    const next = [...without, todayStats].sort((a, b) => (a.dayKey < b.dayKey ? -1 : 1));
+    return next.slice(Math.max(0, next.length - 30));
+  }, [historyBase, todayStats]);
+
+  const streak = useMemo(() => computeStreak(history, new Date()), [history]);
+
+  /* =========================
    * Load
    * ========================= */
   useEffect(() => {
     const loadedHistory = readLS(STORAGE_HISTORY_KEY, []);
     const h = Array.isArray(loadedHistory) ? loadedHistory : [];
-    setHistory(h);
-    setStreak(computeStreak(h, new Date()));
 
     const s = readLS(STORAGE_STATE_KEY, null);
-    if (!s) return;
-
-    if (typeof s.themeId === "string" && THEMES[s.themeId]) setThemeId(s.themeId);
-
-    if (typeof s.eyeBreakInterval === "number") setEyeBreakInterval(clampInt(s.eyeBreakInterval, 600, 7200));
-    if (typeof s.stretchInterval === "number") setStretchInterval(clampInt(s.stretchInterval, 900, 10800));
-    if (typeof s.soundEnabled === "boolean") setSoundEnabled(s.soundEnabled);
-
-    if (typeof s.cupMl === "number") setCupMl(clampInt(s.cupMl, 150, 600));
-    if (typeof s.dailyGoalMl === "number") setDailyGoalMl(clampInt(s.dailyGoalMl, 1200, 4000));
-    if (typeof s.avatar === "string") setAvatar(s.avatar === "male" ? "male" : "female");
-    if (typeof s.bubblesEnabled === "boolean") setBubblesEnabled(s.bubblesEnabled);
 
     const current = dayKey();
-    if (s.todayStats?.dayKey === current) {
+    lastDayRef.current = current;
+
+    // base history: on enlève today si présent (on le réinjecte via useMemo)
+    setHistoryBase(h.filter((e) => e?.dayKey && e.dayKey !== current));
+
+    if (s && typeof s.themeId === "string" && THEMES[s.themeId]) setThemeId(s.themeId);
+
+    if (s && typeof s.eyeBreakInterval === "number") setEyeBreakInterval(clampInt(s.eyeBreakInterval, 600, 7200));
+    if (s && typeof s.stretchInterval === "number") setStretchInterval(clampInt(s.stretchInterval, 900, 10800));
+    if (s && typeof s.soundEnabled === "boolean") setSoundEnabled(s.soundEnabled);
+
+    if (s && typeof s.cupMl === "number") setCupMl(clampInt(s.cupMl, 150, 600));
+    if (s && typeof s.dailyGoalMl === "number") setDailyGoalMl(clampInt(s.dailyGoalMl, 1200, 4000));
+   if (s && typeof s.avatar === "string") {
+  if (s.avatar === "male" || s.avatar === "child" || s.avatar === "female") setAvatar(s.avatar);
+  else setAvatar("female");
+}
+
+    if (s && typeof s.bubblesEnabled === "boolean") setBubblesEnabled(s.bubblesEnabled);
+
+    // today stats
+    if (s?.todayStats?.dayKey === current) {
       setTodayStats({
         dayKey: current,
         waterMl: clampInt(s.todayStats.waterMl ?? 0, 0, 50_000),
@@ -515,33 +462,22 @@ export default function ZenhydratationApp() {
         stretches: clampInt(s.todayStats.stretches ?? 0, 0, 500),
         wakeRoutines: clampInt(s.todayStats.wakeRoutines ?? 0, 0, 500),
         sleepRoutines: clampInt(s.todayStats.sleepRoutines ?? 0, 0, 500),
-        workTime: clampInt(s.todayStats.workTime ?? 0, 0, 24 * 3600),
         details: {
-          eye:
-            s.todayStats.details?.eye && typeof s.todayStats.details.eye === "object"
-              ? s.todayStats.details.eye
-              : {},
-          stretch:
-            s.todayStats.details?.stretch && typeof s.todayStats.details.stretch === "object"
-              ? s.todayStats.details.stretch
-              : {},
-          wake:
-            s.todayStats.details?.wake && typeof s.todayStats.details.wake === "object"
-              ? s.todayStats.details.wake
-              : {},
-          sleep:
-            s.todayStats.details?.sleep && typeof s.todayStats.details.sleep === "object"
-              ? s.todayStats.details.sleep
-              : {}
+          eye: (s.todayStats.details?.eye && typeof s.todayStats.details.eye === "object") ? s.todayStats.details.eye : {},
+          stretch: (s.todayStats.details?.stretch && typeof s.todayStats.details.stretch === "object") ? s.todayStats.details.stretch : {},
+          wake: (s.todayStats.details?.wake && typeof s.todayStats.details.wake === "object") ? s.todayStats.details.wake : {},
+          sleep: (s.todayStats.details?.sleep && typeof s.todayStats.details.sleep === "object") ? s.todayStats.details.sleep : {}
         }
       });
 
       if (typeof s.waterMl === "number") setWaterMl(clampInt(s.waterMl, 0, 50_000));
       else setWaterMl(clampInt(s.todayStats?.waterMl ?? 0, 0, 50_000));
 
-      setEyeBreakTimer(clampInt(s.eyeBreakTimer ?? eyeBreakInterval, 1, 7200));
-      setStretchTimer(clampInt(s.stretchTimer ?? stretchInterval, 1, 10800));
+      setEyeBreakTimer(clampInt(s.eyeBreakTimer ?? (s.eyeBreakInterval ?? 1200), 1, 7200));
+      setStretchTimer(clampInt(s.stretchTimer ?? (s.stretchInterval ?? 3600), 1, 10800));
       setIsPaused(!!s.isPaused);
+
+      if (typeof s.workTimeSec === "number") setWorkTimeSec(clampInt(s.workTimeSec, 0, 24 * 3600));
     } else {
       setTodayStats({
         dayKey: current,
@@ -550,18 +486,18 @@ export default function ZenhydratationApp() {
         stretches: 0,
         wakeRoutines: 0,
         sleepRoutines: 0,
-        workTime: 0,
         details: { eye: {}, stretch: {}, wake: {}, sleep: {} }
       });
       setWaterMl(0);
-      setEyeBreakTimer(s.eyeBreakInterval ?? 1200);
-      setStretchTimer(s.stretchInterval ?? 3600);
+      setWorkTimeSec(0);
+      setEyeBreakTimer(s?.eyeBreakInterval ?? 1200);
+      setStretchTimer(s?.stretchInterval ?? 3600);
       setIsPaused(false);
     }
   }, []);
 
   /* =========================
-   * Save
+   * Save (debounced) - n'écrit plus toutes les secondes
    * ========================= */
   useEffect(() => {
     const payload = {
@@ -577,6 +513,7 @@ export default function ZenhydratationApp() {
       eyeBreakTimer,
       stretchTimer,
       isPaused,
+      workTimeSec,
       todayStats
     };
 
@@ -601,6 +538,7 @@ export default function ZenhydratationApp() {
     eyeBreakTimer,
     stretchTimer,
     isPaused,
+    workTimeSec,
     todayStats
   ]);
 
@@ -612,28 +550,48 @@ export default function ZenhydratationApp() {
   }, [waterMl]);
 
   /* =========================
-   * Upsert today in history (max 30)
+   * Persist history safely (no per-second writes)
+   * - On visibility change: save derived history (30)
    * ========================= */
   useEffect(() => {
-    const current = todayStats.dayKey;
-    setHistory((prev) => {
-      const without = prev.filter((e) => e.dayKey !== current);
-      const next = [...without, todayStats].sort((a, b) => (a.dayKey < b.dayKey ? -1 : 1));
-      const trimmed = next.slice(Math.max(0, next.length - 30));
-      writeLS(STORAGE_HISTORY_KEY, trimmed);
-      setStreak(computeStreak(trimmed, new Date()));
-      return trimmed;
-    });
-  }, [todayStats]);
+    if (typeof document === "undefined") return;
+
+    const persist = () => {
+      writeLS(STORAGE_HISTORY_KEY, history);
+    };
+
+    const onVis = () => {
+      if (document.visibilityState !== "visible") persist();
+    };
+
+    document.addEventListener("visibilitychange", onVis);
+    window.addEventListener("beforeunload", persist);
+
+    return () => {
+      document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("beforeunload", persist);
+    };
+  }, [history]);
 
   /* =========================
-   * Day rollover
+   * Day rollover (commit yesterday into base history, reset today)
    * ========================= */
   useEffect(() => {
     const id = setInterval(() => {
       const current = dayKey();
       if (lastDayRef.current !== current) {
+        // commit yesterday in base history
+        setHistoryBase((prev) => {
+          const without = (prev ?? []).filter((e) => e.dayKey !== lastDayRef.current);
+          const next = [...without, { ...todayStats }].sort((a, b) => (a.dayKey < b.dayKey ? -1 : 1));
+          const trimmed = next.slice(Math.max(0, next.length - 30));
+          writeLS(STORAGE_HISTORY_KEY, [...trimmed, { ...todayStats }].slice(-30));
+          return trimmed;
+        });
+
         lastDayRef.current = current;
+
+        // reset today
         setTodayStats({
           dayKey: current,
           waterMl: 0,
@@ -641,10 +599,11 @@ export default function ZenhydratationApp() {
           stretches: 0,
           wakeRoutines: 0,
           sleepRoutines: 0,
-          workTime: 0,
           details: { eye: {}, stretch: {}, wake: {}, sleep: {} }
         });
+
         setWaterMl(0);
+        setWorkTimeSec(0);
         setEyeBreakTimer(eyeBreakInterval);
         setStretchTimer(stretchInterval);
         setShowNotif(null);
@@ -653,11 +612,12 @@ export default function ZenhydratationApp() {
         setIsPaused(false);
       }
     }, 30_000);
+
     return () => clearInterval(id);
-  }, [eyeBreakInterval, stretchInterval]);
+  }, [eyeBreakInterval, stretchInterval, todayStats]);
 
   /* =========================
-   * Main timers
+   * Main timers (workTimeSec séparé)
    * ========================= */
   useEffect(() => {
     if (isPaused) return;
@@ -679,7 +639,7 @@ export default function ZenhydratationApp() {
         return prev - 1;
       });
 
-      setTodayStats((s) => ({ ...s, workTime: s.workTime + 1 }));
+      setWorkTimeSec((t) => t + 1);
     }, 1000);
 
     return () => clearInterval(id);
@@ -904,8 +864,6 @@ export default function ZenhydratationApp() {
           </button>
         </div>
 
-        {/* NOTE: Hero supprimée */}
-
         {/* Energy / Avatar */}
         <div className={cn("mt-6 rounded-[28px] p-6", theme.card)}>
           <div className="flex items-center gap-4">
@@ -974,7 +932,7 @@ export default function ZenhydratationApp() {
           </div>
         </div>
 
-        {/* Exercices (format large pour toutes les tuiles) */}
+        {/* Exercices */}
         <div className="mt-7">
           <div className={cn("text-[28px] font-semibold", theme.textPrimary)}>Exercices</div>
 
@@ -1037,8 +995,8 @@ export default function ZenhydratationApp() {
   };
 
   const StatsScreen = () => {
-    const workH = Math.floor(todayStats.workTime / 3600);
-    const workM = Math.floor((todayStats.workTime % 3600) / 60);
+    const workH = Math.floor(workTimeSec / 3600);
+    const workM = Math.floor((workTimeSec % 3600) / 60);
 
     const renderDetail = (groupKey, title) => {
       const entries = Object.entries(todayStats.details?.[groupKey] ?? {});
@@ -1502,41 +1460,59 @@ export default function ZenhydratationApp() {
               {/* Avatar */}
               <div className={cn("rounded-[22px] p-4", theme.cardSoft)}>
                 <div className={cn("text-[13px] font-semibold", theme.textSecondary)}>Avatar</div>
-                <div className="mt-3 grid grid-cols-2 gap-2">
-                  <button
-                    onClick={() => setAvatar("female")}
-                    className={cn(
-                      "rounded-2xl px-3 py-3 text-[12px] font-semibold transition border",
-                      avatar === "female"
-                        ? theme.id === "neo"
-                          ? "border-white/20 bg-white/[0.10]"
-                          : "border-black/15 bg-black/[0.04]"
-                        : theme.id === "neo"
-                          ? "border-white/10 bg-white/[0.06] hover:bg-white/[0.10]"
-                          : "border-black/10 bg-black/[0.02] hover:bg-black/[0.04]",
-                      theme.textPrimary
-                    )}
-                  >
-                    Femme
-                  </button>
-                  <button
-                    onClick={() => setAvatar("male")}
-                    className={cn(
-                      "rounded-2xl px-3 py-3 text-[12px] font-semibold transition border",
-                      avatar === "male"
-                        ? theme.id === "neo"
-                          ? "border-white/20 bg-white/[0.10]"
-                          : "border-black/15 bg-black/[0.04]"
-                        : theme.id === "neo"
-                          ? "border-white/10 bg-white/[0.06] hover:bg-white/[0.10]"
-                          : "border-black/10 bg-black/[0.02] hover:bg-black/[0.04]",
-                      theme.textPrimary
-                    )}
-                  >
-                    Homme
-                  </button>
-                </div>
-              </div>
+<div className="mt-3 grid grid-cols-3 gap-2">
+  <button
+    onClick={() => setAvatar("female")}
+    className={cn(
+      "rounded-2xl px-3 py-3 text-[12px] font-semibold transition border",
+      avatar === "female"
+        ? theme.id === "neo"
+          ? "border-white/20 bg-white/[0.10]"
+          : "border-black/15 bg-black/[0.04]"
+        : theme.id === "neo"
+          ? "border-white/10 bg-white/[0.06] hover:bg-white/[0.10]"
+          : "border-black/10 bg-black/[0.02] hover:bg-black/[0.04]",
+      theme.textPrimary
+    )}
+  >
+    Femme
+  </button>
+
+  <button
+    onClick={() => setAvatar("male")}
+    className={cn(
+      "rounded-2xl px-3 py-3 text-[12px] font-semibold transition border",
+      avatar === "male"
+        ? theme.id === "neo"
+          ? "border-white/20 bg-white/[0.10]"
+          : "border-black/15 bg-black/[0.04]"
+        : theme.id === "neo"
+          ? "border-white/10 bg-white/[0.06] hover:bg-white/[0.10]"
+          : "border-black/10 bg-black/[0.02] hover:bg-black/[0.04]",
+      theme.textPrimary
+    )}
+  >
+    Homme
+  </button>
+
+  <button
+    onClick={() => setAvatar("child")}
+    className={cn(
+      "rounded-2xl px-3 py-3 text-[12px] font-semibold transition border",
+      avatar === "child"
+        ? theme.id === "neo"
+          ? "border-white/20 bg-white/[0.10]"
+          : "border-black/15 bg-black/[0.04]"
+        : theme.id === "neo"
+          ? "border-white/10 bg-white/[0.06] hover:bg-white/[0.10]"
+          : "border-black/10 bg-black/[0.02] hover:bg-black/[0.04]",
+      theme.textPrimary
+    )}
+  >
+    Enfant
+  </button>
+</div>
+
 
               {/* Hydration */}
               <div className={cn("rounded-[22px] p-4", theme.cardSoft)}>
@@ -1677,8 +1653,6 @@ export default function ZenhydratationApp() {
 
         {activeTab === "home" && <HomeScreen />}
         {activeTab === "stats" && <StatsScreen />}
-
-        {/* Bons Plans = page dédiée (fichier séparé) */}
         {activeTab === "deals" && <DealsPage theme={theme} remoteUrl={DEALS_REMOTE_URL} />}
 
         {/* Bottom nav */}
@@ -1722,7 +1696,6 @@ export default function ZenhydratationApp() {
         <RoutinePlayer />
         <SettingsModal />
 
-        {/* Keyframes */}
         <style>{`
           @keyframes zh_wave {
             0%   { transform: translateX(0) translateY(0); }
@@ -1742,7 +1715,7 @@ export default function ZenhydratationApp() {
 }
 
 /* =========================
- * Large action tile (format plein largeur, cohérent sur toutes les tuiles Exercices)
+ * Large action tile
  * ========================= */
 function LargeActionTile({ theme, title, subtitle, icon, glow = "cyan", onClick }) {
   const glowMap = {
@@ -1781,10 +1754,10 @@ function LargeActionTile({ theme, title, subtitle, icon, glow = "cyan", onClick 
 }
 
 /* =========================
- * Avatar mood (emoji homme/femme + état qui évolue)
+ * Avatar mood
  * ========================= */
 function AvatarMood({ theme, avatar, energyScore }) {
-  const person = avatar === "male" ? "👨" : "👩";
+const person = avatar === "male" ? "👨" : avatar === "child" ? "👧" : "👩";
 
   const mood =
     energyScore < 35
@@ -1792,8 +1765,8 @@ function AvatarMood({ theme, avatar, energyScore }) {
       : energyScore < 70
         ? { key: "ok", label: "En amélioration", emoji: "🙂", aura: "bg-amber-500/15" }
         : { key: "good", label: "En forme", emoji: "😄", aura: "bg-emerald-500/15" };
-
-  const genderLabel = avatar === "male" ? "Homme" : "Femme";
+const genderLabel =
+  avatar === "male" ? "Homme" : avatar === "child" ? "Enfant" : "Femme";
 
   return (
     <div className="relative">
@@ -1815,7 +1788,7 @@ function AvatarMood({ theme, avatar, energyScore }) {
 }
 
 /* =========================
- * Water glasses (progress fill + long press undo + bubbles)
+ * Water glasses
  * ========================= */
 function WaterGlasses({
   totalMl,
@@ -1990,4 +1963,3 @@ function Bubble({ x = "50%", delay = "0s" }) {
     />
   );
 }
-
