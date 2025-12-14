@@ -662,34 +662,48 @@ export default function ZenhydratationApp() {
     const sorted = [...history].sort((a, b) => (a.dayKey < b.dayKey ? -1 : 1));
     return sorted.slice(Math.max(0, sorted.length - n));
   };
-const window7 = useMemo(() => lastNDays(7), [history]);
-const window30 = useMemo(() => lastNDays(30), [history]);
 
-const sum = (arr, k) => arr.reduce((acc, x) => acc + (x[k] ?? 0), 0);
+  const window7 = useMemo(() => lastNDays(7), [history]);
+  const window30 = useMemo(() => lastNDays(30), [history]);
 
-const chart7 = useMemo(() => 
-  window7.map((d) => ({
-    day: d.dayKey.slice(5),
-    water: Math.round((d.waterMl ?? 0) / Math.max(1, cupMl)),
-    eye: d.eyeBreaks ?? 0,
-    stretch: d.stretches ?? 0,
-    wake: d.wakeRoutines ?? 0,
-    sleep: d.sleepRoutines ?? 0
-  })),
-  [window7, cupMl]
-);
+  const sum = (arr, k) => arr.reduce((acc, x) => acc + (x[k] ?? 0), 0);
 
-const chart30 = useMemo(() =>
-  window30.map((d) => ({
-    day: d.dayKey.slice(5),
-    water: Math.round((d.waterMl ?? 0) / Math.max(1, cupMl)),
-    eye: d.eyeBreaks ?? 0,
-    stretch: d.stretches ?? 0,
-    wake: d.wakeRoutines ?? 0,
-    sleep: d.sleepRoutines ?? 0
-  })),
-  [window30, cupMl]
-);
+  const chart7 = useMemo(
+    () =>
+      window7.map((d) => ({
+        day: d.dayKey.slice(5),
+        water: Math.round((d.waterMl ?? 0) / Math.max(1, cupMl)),
+        eye: d.eyeBreaks ?? 0,
+        stretch: d.stretches ?? 0,
+        wake: d.wakeRoutines ?? 0,
+        sleep: d.sleepRoutines ?? 0
+      })),
+    [window7, cupMl]
+  );
+
+  const chart30 = useMemo(
+    () =>
+      window30.map((d) => ({
+        day: d.dayKey.slice(5),
+        water: Math.round((d.waterMl ?? 0) / Math.max(1, cupMl)),
+        eye: d.eyeBreaks ?? 0,
+        stretch: d.stretches ?? 0,
+        wake: d.wakeRoutines ?? 0,
+        sleep: d.sleepRoutines ?? 0
+      })),
+    [window30, cupMl]
+  );
+
+  // ✅ FIX: mémoiser tooltipStyle une seule fois et l'utiliser dans StatsScreen
+  const tooltipStyle = useMemo(
+    () => ({
+      background: theme.tooltip.background,
+      border: theme.tooltip.border,
+      borderRadius: 14,
+      color: theme.tooltip.color
+    }),
+    [theme.tooltip.background, theme.tooltip.border, theme.tooltip.color]
+  );
 
   /* =========================
    * Hydration actions (ml)
@@ -959,42 +973,7 @@ const chart30 = useMemo(() =>
       </div>
     );
   };
-// 1. Mémoïser tooltipStyle (avant le return du StatsScreen)
-const tooltipStyle = useMemo(() => ({
-  background: theme.tooltip.background,
-  border: theme.tooltip.border,
-  borderRadius: 14,
-  color: theme.tooltip.color
-}), [theme.tooltip.background, theme.tooltip.border, theme.tooltip.color]);
 
-// 2. Mémoïser window7 et window30
-const window7 = useMemo(() => lastNDays(7), [history]);
-const window30 = useMemo(() => lastNDays(30), [history]);
-
-// 3. Mémoïser chart7 et chart30
-const chart7 = useMemo(() => 
-  window7.map((d) => ({
-    day: d.dayKey.slice(5),
-    water: Math.round((d.waterMl ?? 0) / Math.max(1, cupMl)),
-    eye: d.eyeBreaks ?? 0,
-    stretch: d.stretches ?? 0,
-    wake: d.wakeRoutines ?? 0,
-    sleep: d.sleepRoutines ?? 0
-  })),
-  [window7, cupMl]
-);
-
-const chart30 = useMemo(() =>
-  window30.map((d) => ({
-    day: d.dayKey.slice(5),
-    water: Math.round((d.waterMl ?? 0) / Math.max(1, cupMl)),
-    eye: d.eyeBreaks ?? 0,
-    stretch: d.stretches ?? 0,
-    wake: d.wakeRoutines ?? 0,
-    sleep: d.sleepRoutines ?? 0
-  })),
-  [window30, cupMl]
-);
   const StatsScreen = () => {
     const workH = Math.floor(todayStats.workTime / 3600);
     const workM = Math.floor((todayStats.workTime % 3600) / 60);
@@ -1018,13 +997,6 @@ const chart30 = useMemo(() =>
           )}
         </div>
       );
-    };
-
-    const tooltipStyle = {
-      background: theme.tooltip.background,
-      border: theme.tooltip.border,
-      borderRadius: 14,
-      color: theme.tooltip.color
     };
 
     return (
@@ -1138,7 +1110,13 @@ const chart30 = useMemo(() =>
           </div>
         </div>
 
-
+        {/* Détails (si vous souhaitez les afficher) */}
+        {/* <div className="grid grid-cols-1 gap-4">
+          {renderDetail("eye", "Détails yeux")}
+          {renderDetail("stretch", "Détails étirements")}
+          {renderDetail("wake", "Détails réveil")}
+          {renderDetail("sleep", "Détails coucher")}
+        </div> */}
       </div>
     );
   };
