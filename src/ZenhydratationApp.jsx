@@ -954,7 +954,42 @@ export default function ZenhydratationApp() {
       </div>
     );
   };
+// 1. Mémoïser tooltipStyle (avant le return du StatsScreen)
+const tooltipStyle = useMemo(() => ({
+  background: theme.tooltip.background,
+  border: theme.tooltip.border,
+  borderRadius: 14,
+  color: theme.tooltip.color
+}), [theme.tooltip.background, theme.tooltip.border, theme.tooltip.color]);
 
+// 2. Mémoïser window7 et window30
+const window7 = useMemo(() => lastNDays(7), [history]);
+const window30 = useMemo(() => lastNDays(30), [history]);
+
+// 3. Mémoïser chart7 et chart30
+const chart7 = useMemo(() => 
+  window7.map((d) => ({
+    day: d.dayKey.slice(5),
+    water: Math.round((d.waterMl ?? 0) / Math.max(1, cupMl)),
+    eye: d.eyeBreaks ?? 0,
+    stretch: d.stretches ?? 0,
+    wake: d.wakeRoutines ?? 0,
+    sleep: d.sleepRoutines ?? 0
+  })),
+  [window7, cupMl]
+);
+
+const chart30 = useMemo(() =>
+  window30.map((d) => ({
+    day: d.dayKey.slice(5),
+    water: Math.round((d.waterMl ?? 0) / Math.max(1, cupMl)),
+    eye: d.eyeBreaks ?? 0,
+    stretch: d.stretches ?? 0,
+    wake: d.wakeRoutines ?? 0,
+    sleep: d.sleepRoutines ?? 0
+  })),
+  [window30, cupMl]
+);
   const StatsScreen = () => {
     const workH = Math.floor(todayStats.workTime / 3600);
     const workM = Math.floor((todayStats.workTime % 3600) / 60);
