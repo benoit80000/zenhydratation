@@ -34,7 +34,7 @@ const FALLBACK_DEALS = [
 ];
 
 // URL du JSON distant (à remplacer par la vôtre)
-const DEFAULT_REMOTE_URL = "https://example.com/zenhydratation-deals.json";
+const DEFAULT_REMOTE_URL = "https://zenhydratation.vercel.app/zenhydratation-deals.json";
 
 export default function DealsPage({ theme, remoteUrl = DEFAULT_REMOTE_URL }) {
   const [q, setQ] = useState("");
