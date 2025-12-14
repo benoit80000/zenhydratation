@@ -1073,11 +1073,11 @@ export default function ZenhydratationApp() {
                       color: theme.id === "neo" ? "rgba(255,255,255,0.7)" : "rgba(15,23,42,0.65)"
                     }}
                   />
-                  <Bar dataKey="water" name={`Eau (doses ${cupMl}ml)`} fill="rgba(34, 211, 238, 0.60)" />
-                  <Bar dataKey="eye" name="Yeux" fill="rgba(167, 139, 250, 0.60)" />
-                  <Bar dataKey="stretch" name="Étirements" fill="rgba(52, 211, 153, 0.60)" />
-                  <Bar dataKey="wake" name="Réveil" fill="rgba(251, 191, 36, 0.60)" />
-                  <Bar dataKey="sleep" name="Coucher" fill="rgba(129, 140, 248, 0.60)" />
+                  <Bar isAnimationActive={false} dataKey="water" name={`Eau (doses ${cupMl}ml)`} fill="rgba(34, 211, 238, 0.60)" />
+                  <Bar isAnimationActive={false} dataKey="eye" name="Yeux" fill="rgba(167, 139, 250, 0.60)" />
+                  <Bar isAnimationActive={false} dataKey="stretch" name="Étirements" fill="rgba(52, 211, 153, 0.60)" />
+                  <Bar isAnimationActive={false} dataKey="wake" name="Réveil" fill="rgba(251, 191, 36, 0.60)" />
+                  <Bar isAnimationActive={false} dataKey="sleep" name="Coucher" fill="rgba(129, 140, 248, 0.60)" />
                 </BarChart>
               </ResponsiveContainer>
             )}
@@ -1116,11 +1116,11 @@ export default function ZenhydratationApp() {
                       color: theme.id === "neo" ? "rgba(255,255,255,0.7)" : "rgba(15,23,42,0.65)"
                     }}
                   />
-                  <Bar dataKey="water" name={`Eau (doses ${cupMl}ml)`} fill="rgba(34, 211, 238, 0.55)" />
-                  <Bar dataKey="eye" name="Yeux" fill="rgba(167, 139, 250, 0.55)" />
-                  <Bar dataKey="stretch" name="Étirements" fill="rgba(52, 211, 153, 0.55)" />
-                  <Bar dataKey="wake" name="Réveil" fill="rgba(251, 191, 36, 0.55)" />
-                  <Bar dataKey="sleep" name="Coucher" fill="rgba(129, 140, 248, 0.55)" />
+                  <Bar isAnimationActive={false} dataKey="water" name={`Eau (doses ${cupMl}ml)`} fill="rgba(34, 211, 238, 0.55)" />
+                  <Bar isAnimationActive={false} dataKey="eye" name="Yeux" fill="rgba(167, 139, 250, 0.55)" />
+                  <Bar isAnimationActive={false} dataKey="stretch" name="Étirements" fill="rgba(52, 211, 153, 0.55)" />
+                  <Bar isAnimationActive={false} dataKey="wake" name="Réveil" fill="rgba(251, 191, 36, 0.55)" />
+                  <Bar isAnimationActive={false} dataKey="sleep" name="Coucher" fill="rgba(129, 140, 248, 0.55)" />
                 </BarChart>
               </ResponsiveContainer>
             )}
