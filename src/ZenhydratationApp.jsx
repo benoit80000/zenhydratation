@@ -362,6 +362,22 @@ export default function ZenhydratationApp() {
     details: { eye: {}, stretch: {}, wake: {}, sleep: {} }
   });
 
+
+  // History is used for charts (water/routines). Avoid updating history every time workTime increments,
+  // otherwise the Stats charts will re-render and appear to "blink".
+  const todayForHistory = useMemo(() => {
+    const { workTime, ...rest } = todayStats;
+    return rest;
+  }, [
+    todayStats.dayKey,
+    todayStats.waterMl,
+    todayStats.eyeBreaks,
+    todayStats.stretches,
+    todayStats.wakeRoutines,
+    todayStats.sleepRoutines,
+    todayStats.details
+  ]);
+
   const saveDebounceRef = useRef(null);
   const lastDayRef = useRef(dayKey());
 
@@ -527,18 +543,19 @@ export default function ZenhydratationApp() {
 
   /* =========================
    * Upsert today in history (max 30)
+   * NOTE: uses todayForHistory (workTime excluded) to avoid chart flicker
    * ========================= */
   useEffect(() => {
-    const current = todayStats.dayKey;
+    const current = todayForHistory.dayKey;
     setHistory((prev) => {
       const without = prev.filter((e) => e.dayKey !== current);
-      const next = [...without, todayStats].sort((a, b) => (a.dayKey < b.dayKey ? -1 : 1));
+      const next = [...without, todayForHistory].sort((a, b) => (a.dayKey < b.dayKey ? -1 : 1));
       const trimmed = next.slice(Math.max(0, next.length - 30));
       writeLS(STORAGE_HISTORY_KEY, trimmed);
       setStreak(computeStreak(trimmed, new Date()));
       return trimmed;
     });
-  }, [todayStats]);
+  }, [todayForHistory]);
 
   /* =========================
    * Day rollover
