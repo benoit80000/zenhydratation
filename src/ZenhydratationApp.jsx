@@ -1098,12 +1098,7 @@ export default function ZenhydratationApp() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-4">
-          {renderDetail("eye", "Détails aujourd’hui — Yeux")}
-          {renderDetail("stretch", "Détails aujourd’hui — Étirements")}
-          {renderDetail("wake", "Détails aujourd’hui — Réveil")}
-          {renderDetail("sleep", "Détails aujourd’hui — Coucher")}
-        </div>
+
       </div>
     );
   };
