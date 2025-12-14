@@ -1640,7 +1640,7 @@ const [avatar, setAvatar] = useState("female"); // "female" | "male" | "child"
     );
   };
 
-  /* =========================
+   /* =========================
    * Render
    * ========================= */
   return (
@@ -1653,6 +1653,8 @@ const [avatar, setAvatar] = useState("female"); // "female" | "male" | "child"
 
         {activeTab === "home" && <HomeScreen />}
         {activeTab === "stats" && <StatsScreen />}
+
+        {/* Bons Plans = page dédiée (fichier séparé) */}
         {activeTab === "deals" && <DealsPage theme={theme} remoteUrl={DEALS_REMOTE_URL} />}
 
         {/* Bottom nav */}
@@ -1660,7 +1662,10 @@ const [avatar, setAvatar] = useState("female"); // "female" | "male" | "child"
           <div className={cn("rounded-[26px] px-6 py-4 flex items-center justify-around", theme.nav)}>
             <button
               onClick={() => setActiveTab("home")}
-              className={cn("flex flex-col items-center gap-1 transition", activeTab === "home" ? theme.textPrimary : theme.textMuted)}
+              className={cn(
+                "flex flex-col items-center gap-1 transition",
+                activeTab === "home" ? theme.textPrimary : theme.textMuted
+              )}
             >
               <Home className="h-6 w-6" />
               <span className="text-[11px] font-semibold">Accueil</span>
@@ -1668,7 +1673,10 @@ const [avatar, setAvatar] = useState("female"); // "female" | "male" | "child"
 
             <button
               onClick={() => setActiveTab("stats")}
-              className={cn("flex flex-col items-center gap-1 transition", activeTab === "stats" ? theme.textPrimary : theme.textMuted)}
+              className={cn(
+                "flex flex-col items-center gap-1 transition",
+                activeTab === "stats" ? theme.textPrimary : theme.textMuted
+              )}
             >
               <TrendingUp className="h-6 w-6" />
               <span className="text-[11px] font-semibold">Stats</span>
@@ -1676,7 +1684,10 @@ const [avatar, setAvatar] = useState("female"); // "female" | "male" | "child"
 
             <button
               onClick={() => setActiveTab("deals")}
-              className={cn("flex flex-col items-center gap-1 transition", activeTab === "deals" ? theme.textPrimary : theme.textMuted)}
+              className={cn(
+                "flex flex-col items-center gap-1 transition",
+                activeTab === "deals" ? theme.textPrimary : theme.textMuted
+              )}
             >
               <ShoppingBag className="h-6 w-6" />
               <span className="text-[11px] font-semibold">Bons Plans</span>
@@ -1684,7 +1695,10 @@ const [avatar, setAvatar] = useState("female"); // "female" | "male" | "child"
 
             <button
               onClick={() => setShowSettings(true)}
-              className={cn("flex flex-col items-center gap-1 transition", showSettings ? theme.textPrimary : theme.textMuted)}
+              className={cn(
+                "flex flex-col items-center gap-1 transition",
+                showSettings ? theme.textPrimary : theme.textMuted
+              )}
             >
               <Settings className="h-6 w-6" />
               <span className="text-[11px] font-semibold">Réglages</span>
@@ -1696,6 +1710,7 @@ const [avatar, setAvatar] = useState("female"); // "female" | "male" | "child"
         <RoutinePlayer />
         <SettingsModal />
 
+        {/* Keyframes */}
         <style>{`
           @keyframes zh_wave {
             0%   { transform: translateX(0) translateY(0); }
@@ -1715,7 +1730,7 @@ const [avatar, setAvatar] = useState("female"); // "female" | "male" | "child"
 }
 
 /* =========================
- * Large action tile
+ * Large action tile (format plein largeur, cohérent sur toutes les tuiles Exercices)
  * ========================= */
 function LargeActionTile({ theme, title, subtitle, icon, glow = "cyan", onClick }) {
   const glowMap = {
@@ -1739,9 +1754,7 @@ function LargeActionTile({ theme, title, subtitle, icon, glow = "cyan", onClick 
       <div className="flex items-center gap-5">
         <div className="relative">
           <div className={cn("absolute inset-0 rounded-full blur-2xl", glowMap[glow] ?? glowMap.cyan)} />
-          <div className={cn("h-11 w-11 rounded-2xl flex items-center justify-center", theme.cardSoft)}>
-            {icon}
-          </div>
+          <div className={cn("h-11 w-11 rounded-2xl flex items-center justify-center", theme.cardSoft)}>{icon}</div>
         </div>
 
         <div className="flex-1 min-w-0">
@@ -1754,10 +1767,10 @@ function LargeActionTile({ theme, title, subtitle, icon, glow = "cyan", onClick 
 }
 
 /* =========================
- * Avatar mood
+ * Avatar mood (emoji homme/femme/enfant + état qui évolue)
  * ========================= */
 function AvatarMood({ theme, avatar, energyScore }) {
-const person = avatar === "male" ? "👨" : avatar === "child" ? "👧" : "👩";
+  const person = avatar === "male" ? "👨" : avatar === "child" ? "👧" : "👩";
 
   const mood =
     energyScore < 35
@@ -1765,8 +1778,8 @@ const person = avatar === "male" ? "👨" : avatar === "child" ? "👧" : "👩"
       : energyScore < 70
         ? { key: "ok", label: "En amélioration", emoji: "🙂", aura: "bg-amber-500/15" }
         : { key: "good", label: "En forme", emoji: "😄", aura: "bg-emerald-500/15" };
-const genderLabel =
-  avatar === "male" ? "Homme" : avatar === "child" ? "Enfant" : "Femme";
+
+  const genderLabel = avatar === "male" ? "Homme" : avatar === "child" ? "Enfant" : "Femme";
 
   return (
     <div className="relative">
@@ -1788,7 +1801,7 @@ const genderLabel =
 }
 
 /* =========================
- * Water glasses
+ * Water glasses (progress fill + long press undo + bubbles)
  * ========================= */
 function WaterGlasses({
   totalMl,
@@ -1822,11 +1835,7 @@ function WaterGlasses({
         : "bg-white border-gray-200";
 
   const rim =
-    theme.id === "neo"
-      ? "bg-white/10"
-      : theme.id === "wellness"
-        ? "bg-white/70"
-        : "bg-gray-100";
+    theme.id === "neo" ? "bg-white/10" : theme.id === "wellness" ? "bg-white/70" : "bg-gray-100";
 
   const maxCups = Math.max(1, Math.ceil(goalMl / Math.max(1, cupMl)));
   const filledCups = Math.floor(totalMl / Math.max(1, cupMl));
