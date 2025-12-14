@@ -1,10 +1,19 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { ExternalLink, ShoppingBag } from "lucide-react";
 
+/**
+ * DealsPage.jsx
+ * - Page indépendante
+ * - Charge des bons plans depuis un JSON distant (modifiable sans rebuild APK)
+ * - Fallback local si offline / erreur
+ */
+
+// Utilitaire déjà présent dans votre app (copiez si besoin)
 function cn(...xs) {
   return xs.filter(Boolean).join(" ");
 }
 
+// Fallback local (si pas de réseau)
 const FALLBACK_DEALS = [
   {
     id: "deal-1",
@@ -24,9 +33,11 @@ const FALLBACK_DEALS = [
   }
 ];
 
+// URL du JSON distant (à remplacer par la vôtre)
 const DEFAULT_REMOTE_URL = "https://zenhydratation.vercel.app/zenhydratation-deals.json";
 
 export default function DealsPage({ theme, remoteUrl = DEFAULT_REMOTE_URL }) {
+  const [q, setQ] = useState("");
   const [cat, setCat] = useState("Tous");
   const [loading, setLoading] = useState(true);
   const [deals, setDeals] = useState(FALLBACK_DEALS);
@@ -43,6 +54,7 @@ export default function DealsPage({ theme, remoteUrl = DEFAULT_REMOTE_URL }) {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
 
+        // format attendu: { "updatedAt": "...", "deals": [ ... ] }
         const nextDeals = Array.isArray(json?.deals) ? json.deals : [];
         if (nextDeals.length === 0) throw new Error("JSON vide ou invalide.");
 
@@ -69,48 +81,41 @@ export default function DealsPage({ theme, remoteUrl = DEFAULT_REMOTE_URL }) {
   }, [deals]);
 
   const filtered = useMemo(() => {
+    const needle = q.trim().toLowerCase();
     return deals.filter((d) => {
-      return cat === "Tous" ? true : d.category === cat;
+      const okCat = cat === "Tous" ? true : d.category === cat;
+      const okQ =
+        needle.length === 0
+          ? true
+          : `${d.title} ${d.desc} ${d.badge} ${d.category}`.toLowerCase().includes(needle);
+      return okCat && okQ;
     });
-  }, [deals, cat]);
-
-  // Theme par défaut
-  const defaultTheme = {
-    id: "default",
-    textPrimary: "text-gray-900",
-    textSecondary: "text-gray-600",
-    textMuted: "text-gray-500",
-    card: "bg-white shadow-sm",
-    cardSoft: "bg-gray-50",
-    surfaceInput: "bg-white border border-gray-200"
-  };
-
-  const activeTheme = theme || defaultTheme;
+  }, [deals, q, cat]);
 
   return (
-    <div className="min-h-screen bg-gray-50 px-5 pb-24 pt-6 space-y-6">
+    <div className="px-5 pb-24 pt-6 space-y-6">
       <div className="flex items-end justify-between">
-        <div className={cn("text-[28px] font-semibold", activeTheme.textPrimary)}>Bons Plans</div>
+        <div className={cn("text-[28px] font-semibold", theme.textPrimary)}>Bons Plans</div>
 
-        <div className={cn("rounded-2xl px-4 py-2 flex items-center gap-2", activeTheme.cardSoft)}>
-          <ShoppingBag className={cn("h-4 w-4", activeTheme.id === "neo" ? "text-white/80" : "text-gray-700")} />
-          <span className={cn("text-[13px] font-semibold", activeTheme.textSecondary)}>
+        <div className={cn("rounded-2xl px-4 py-2 flex items-center gap-2", theme.cardSoft)}>
+          <ShoppingBag className={cn("h-4 w-4", theme.id === "neo" ? "text-white/80" : "text-gray-700")} />
+          <span className={cn("text-[13px] font-semibold", theme.textSecondary)}>
             {loading ? "…" : filtered.length}
           </span>
         </div>
       </div>
 
       {errorMsg ? (
-        <div className={cn("rounded-[28px] p-5", activeTheme.card)}>
-          <div className={cn("text-[12px]", activeTheme.textMuted)}>{errorMsg}</div>
+        <div className={cn("rounded-[28px] p-5", theme.card)}>
+          <div className={cn("text-[12px]", theme.textMuted)}>{errorMsg}</div>
         </div>
       ) : null}
 
-      <div className={cn("rounded-[28px] p-5", activeTheme.card)}>
+      <div className={cn("rounded-[28px] p-5", theme.card)}>
         <select
           value={cat}
           onChange={(e) => setCat(e.target.value)}
-          className={cn("w-full rounded-2xl px-3 py-3 text-[13px] font-semibold", activeTheme.surfaceInput)}
+          className={cn("w-full rounded-2xl px-3 py-3 text-[13px] font-semibold", theme.surfaceInput)}
         >
           {categories.map((c) => (
             <option key={c} value={c}>
@@ -122,18 +127,18 @@ export default function DealsPage({ theme, remoteUrl = DEFAULT_REMOTE_URL }) {
 
       <div className="space-y-4">
         {filtered.map((d) => (
-          <div key={d.id} className={cn("rounded-[28px] p-6", activeTheme.card)}>
+          <div key={d.id} className={cn("rounded-[28px] p-6", theme.card)}>
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
-                <div className={cn("text-[18px] font-semibold", activeTheme.textPrimary)}>{d.title}</div>
-                <div className={cn("mt-2 text-[13px] leading-snug", activeTheme.textSecondary)}>{d.desc}</div>
+                <div className={cn("text-[18px] font-semibold", theme.textPrimary)}>{d.title}</div>
+                <div className={cn("mt-2 text-[13px] leading-snug", theme.textSecondary)}>{d.desc}</div>
 
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   {d.category ? (
                     <span
                       className={cn(
                         "px-3 py-1 rounded-full text-[12px] font-semibold",
-                        activeTheme.id === "neo"
+                        theme.id === "neo"
                           ? "bg-white/10 border border-white/10 text-white/75"
                           : "bg-black/[0.03] border border-black/10 text-gray-700"
                       )}
@@ -146,7 +151,7 @@ export default function DealsPage({ theme, remoteUrl = DEFAULT_REMOTE_URL }) {
                     <span
                       className={cn(
                         "px-3 py-1 rounded-full text-[12px] font-semibold",
-                        activeTheme.id === "neo"
+                        theme.id === "neo"
                           ? "bg-white/10 border border-white/10 text-white/75"
                           : "bg-black/[0.03] border border-black/10 text-gray-700"
                       )}
@@ -163,9 +168,9 @@ export default function DealsPage({ theme, remoteUrl = DEFAULT_REMOTE_URL }) {
                 rel="noreferrer"
                 className={cn(
                   "shrink-0 rounded-2xl px-4 py-3 font-semibold text-[13px] transition inline-flex items-center gap-2",
-                  activeTheme.cardSoft,
-                  activeTheme.id === "neo" ? "hover:bg-white/[0.10]" : "hover:bg-black/[0.03]",
-                  activeTheme.textPrimary
+                  theme.cardSoft,
+                  theme.id === "neo" ? "hover:bg-white/[0.10]" : "hover:bg-black/[0.03]",
+                  theme.textPrimary
                 )}
                 title="Ouvrir sur Amazon"
               >
@@ -177,8 +182,8 @@ export default function DealsPage({ theme, remoteUrl = DEFAULT_REMOTE_URL }) {
         ))}
 
         {!loading && filtered.length === 0 ? (
-          <div className={cn("rounded-[28px] p-6", activeTheme.card)}>
-            <div className={cn("text-[14px] font-semibold", activeTheme.textSecondary)}>
+          <div className={cn("rounded-[28px] p-6", theme.card)}>
+            <div className={cn("text-[14px] font-semibold", theme.textSecondary)}>
               Aucun bon plan ne correspond à votre recherche.
             </div>
           </div>
@@ -186,4 +191,4 @@ export default function DealsPage({ theme, remoteUrl = DEFAULT_REMOTE_URL }) {
       </div>
     </div>
   );
-            }
+}
