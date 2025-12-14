@@ -41,6 +41,8 @@ import DealsPage from "./DealsPage";
  * MAJ:
  * - Suppression de la "Hero" (Pause yeux / Étirements) en haut
  * - Ajout onglet "Bons Plans" après Stats, rendu via DealsPage (fichier séparé)
+ * - Remplacement "Raccourcis" => "Exercices"
+ * - Tuiles Exercices en format large (plein largeur) pour toutes
  * ==========================================================
  */
 
@@ -534,7 +536,6 @@ export default function ZenhydratationApp() {
         }
       });
 
-      // waterMl is source of truth; fall back on saved waterMl, else todayStats.waterMl
       if (typeof s.waterMl === "number") setWaterMl(clampInt(s.waterMl, 0, 50_000));
       else setWaterMl(clampInt(s.todayStats?.waterMl ?? 0, 0, 50_000));
 
@@ -568,14 +569,11 @@ export default function ZenhydratationApp() {
       eyeBreakInterval,
       stretchInterval,
       soundEnabled,
-      // hydration
       cupMl,
       dailyGoalMl,
       waterMl,
-      // avatar / visual
       avatar,
       bubblesEnabled,
-      // timers / session
       eyeBreakTimer,
       stretchTimer,
       isPaused,
@@ -851,7 +849,6 @@ export default function ZenhydratationApp() {
         if (r.remainingSec <= 1) {
           const step = r.queue[r.index];
 
-          // details per step
           setTodayStats((s) => {
             const details = s.details ?? { eye: {}, stretch: {}, wake: {}, sleep: {} };
             const bucket = { ...(details[r.type] ?? {}) };
@@ -883,9 +880,7 @@ export default function ZenhydratationApp() {
       <div className="p-6">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <div className={cn("text-[20px] font-bold", theme.textPrimary)}>
-              Zen et hydraté
-            </div>
+            <div className={cn("text-[20px] font-bold", theme.textPrimary)}>Zen et hydraté</div>
             <div className={cn("text-[13px] mt-1", theme.textSecondary)}>
               Pause, Respiration et Hydratation pour prendre soin de son corps et de son esprit.
             </div>
@@ -909,7 +904,7 @@ export default function ZenhydratationApp() {
           </button>
         </div>
 
-        {/* NOTE: Hero supprimée (Pause yeux / Étirements) */}
+        {/* NOTE: Hero supprimée */}
 
         {/* Energy / Avatar */}
         <div className={cn("mt-6 rounded-[28px] p-6", theme.card)}>
@@ -940,12 +935,10 @@ export default function ZenhydratationApp() {
           </div>
         </div>
 
-        {/* Hydratation (ml + verres progressifs) */}
+        {/* Hydratation */}
         <div className={cn("mt-6 rounded-[28px] p-6", theme.card)}>
           <div className="flex items-end justify-between">
-            <div className={cn("text-[28px] font-semibold leading-none", theme.textPrimary)}>
-              Hydratation
-            </div>
+            <div className={cn("text-[28px] font-semibold leading-none", theme.textPrimary)}>Hydratation</div>
             <div className={cn("text-[16px] font-semibold", theme.textSecondary)}>
               {waterMl} / {dailyGoalMl} ml
             </div>
@@ -981,29 +974,27 @@ export default function ZenhydratationApp() {
           </div>
         </div>
 
-        {/* Shortcuts */}
+        {/* Exercices (format large pour toutes les tuiles) */}
         <div className="mt-7">
-          <div className={cn("text-[28px] font-semibold", theme.textPrimary)}>Raccourcis</div>
+          <div className={cn("text-[28px] font-semibold", theme.textPrimary)}>Exercices</div>
 
-          <div className="mt-5 grid grid-cols-2 gap-4">
-            <ShortcutTile
-              title="Yeux"
-              subtitle={formatTime(eyeBreakTimer)}
-              glow="violet"
+          <div className="mt-5 space-y-4">
+            <LargeActionTile
               theme={theme}
+              title="Yeux"
+              subtitle={`Prochaine pause dans ${formatTime(eyeBreakTimer)}`}
+              glow="violet"
               icon={
-                theme.id === "neo"
-                  ? <Eye className="h-6 w-6 text-white/85" />
-                  : <Eye className="h-6 w-6 text-violet-600" />
+                theme.id === "neo" ? <Eye className="h-6 w-6 text-white/85" /> : <Eye className="h-6 w-6 text-violet-600" />
               }
               onClick={() => setShowExercise("eye")}
             />
 
-            <ShortcutTile
-              title="Étirements"
-              subtitle={formatTime(stretchTimer)}
-              glow="emerald"
+            <LargeActionTile
               theme={theme}
+              title="Étirements"
+              subtitle={`Prochain dans ${formatTime(stretchTimer)}`}
+              glow="emerald"
               icon={
                 theme.id === "neo"
                   ? <Activity className="h-6 w-6 text-white/85" />
@@ -1012,28 +1003,24 @@ export default function ZenhydratationApp() {
               onClick={() => setShowExercise("stretch")}
             />
 
-            <ShortcutTile
+            <LargeActionTile
+              theme={theme}
               title="Réveil"
               subtitle={`${exercises.wake.length} étapes`}
               glow="amber"
-              theme={theme}
               icon={
-                theme.id === "neo"
-                  ? <Sun className="h-6 w-6 text-white/85" />
-                  : <Sun className="h-6 w-6 text-amber-600" />
+                theme.id === "neo" ? <Sun className="h-6 w-6 text-white/85" /> : <Sun className="h-6 w-6 text-amber-600" />
               }
               onClick={() => startQueue("wake", exercises.wake)}
             />
 
-            <ShortcutTile
+            <LargeActionTile
+              theme={theme}
               title="Coucher"
               subtitle={`${exercises.sleep.length} étapes`}
               glow="indigo"
-              theme={theme}
               icon={
-                theme.id === "neo"
-                  ? <Moon className="h-6 w-6 text-white/85" />
-                  : <Moon className="h-6 w-6 text-indigo-600" />
+                theme.id === "neo" ? <Moon className="h-6 w-6 text-white/85" /> : <Moon className="h-6 w-6 text-indigo-600" />
               }
               onClick={() => startQueue("sleep", exercises.sleep)}
             />
@@ -1152,9 +1139,7 @@ export default function ZenhydratationApp() {
         <div className={cn("rounded-[28px] p-6", theme.card)}>
           <div className="flex items-center justify-between">
             <div className={cn("text-[16px] font-semibold", theme.textPrimary)}>Graphique 30 jours</div>
-            <div className={cn("text-[13px] font-semibold", theme.textMuted)}>
-              Jours: {window30.length}
-            </div>
+            <div className={cn("text-[13px] font-semibold", theme.textMuted)}>Jours: {window30.length}</div>
           </div>
 
           <div className="mt-4" style={{ width: "100%", height: 260 }}>
@@ -1553,7 +1538,7 @@ export default function ZenhydratationApp() {
                 </div>
               </div>
 
-              {/* Hydration in ml */}
+              {/* Hydration */}
               <div className={cn("rounded-[22px] p-4", theme.cardSoft)}>
                 <div className={cn("text-[13px] font-semibold", theme.textSecondary)}>Hydratation (ml)</div>
 
@@ -1757,9 +1742,9 @@ export default function ZenhydratationApp() {
 }
 
 /* =========================
- * Shortcut tile
+ * Large action tile (format plein largeur, cohérent sur toutes les tuiles Exercices)
  * ========================= */
-function ShortcutTile({ title, subtitle, icon, glow = "cyan", theme, onClick }) {
+function LargeActionTile({ theme, title, subtitle, icon, glow = "cyan", onClick }) {
   const glowMap = {
     cyan: "bg-cyan-400/20",
     violet: "bg-violet-500/20",
@@ -1771,14 +1756,14 @@ function ShortcutTile({ title, subtitle, icon, glow = "cyan", theme, onClick }) 
   return (
     <button
       onClick={onClick}
+      type="button"
       className={cn(
-        "group w-full rounded-[24px] p-4 text-left transition active:scale-[0.99]",
+        "w-full rounded-[28px] p-6 text-left transition active:scale-[0.99]",
         theme.card,
         theme.id === "neo" ? "hover:bg-white/[0.10]" : "hover:bg-black/[0.03]"
       )}
-      type="button"
     >
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-5">
         <div className="relative">
           <div className={cn("absolute inset-0 rounded-full blur-2xl", glowMap[glow] ?? glowMap.cyan)} />
           <div className={cn("h-11 w-11 rounded-2xl flex items-center justify-center", theme.cardSoft)}>
@@ -1786,9 +1771,9 @@ function ShortcutTile({ title, subtitle, icon, glow = "cyan", theme, onClick }) 
           </div>
         </div>
 
-        <div className="min-w-0">
-          <div className={cn("text-[16px] font-semibold leading-tight truncate", theme.textPrimary)}>{title}</div>
-          <div className={cn("mt-1 text-[13px] font-semibold leading-none truncate", theme.textMuted)}>{subtitle}</div>
+        <div className="flex-1 min-w-0">
+          <div className={cn("text-[28px] font-semibold leading-none", theme.textPrimary)}>{title}</div>
+          <div className={cn("mt-2 text-[18px] font-medium", theme.textSecondary)}>{subtitle}</div>
         </div>
       </div>
     </button>
@@ -1818,9 +1803,7 @@ function AvatarMood({ theme, avatar, energyScore }) {
         aria-label={`Avatar ${genderLabel}, ${mood.label}`}
         title={`${genderLabel} • ${mood.label}`}
       >
-        <div className={cn("text-[11px] font-semibold", theme.textMuted)}>
-          {genderLabel}
-        </div>
+        <div className={cn("text-[11px] font-semibold", theme.textMuted)}>{genderLabel}</div>
 
         <div className={cn("mt-1 text-[26px] font-semibold", theme.textPrimary)} style={{ lineHeight: 1 }}>
           <span aria-hidden="true">{person}</span>{" "}
@@ -1932,22 +1915,18 @@ function WaterGlasses({
               title="Clic: +dose — Appui long: annuler"
             >
               <div className={cn("relative w-full h-full rounded-2xl border overflow-hidden", glassBg)}>
-                {/* highlight */}
                 <div className="absolute inset-0 pointer-events-none">
                   <div className="absolute left-1 top-2 bottom-2 w-[22%] rounded-full bg-white/10" />
                 </div>
 
-                {/* rim */}
                 <div className={cn("absolute top-0 left-0 right-0 h-[10%] opacity-60", rim)} />
 
-                {/* water fill */}
                 <div
                   className="absolute left-0 right-0 bottom-0 transition-[height] duration-700 ease-out"
                   style={{ height: `${fillPct * 100}%` }}
                 >
                   <div className={cn("absolute inset-0 bg-gradient-to-b", fillColor)} />
 
-                  {/* wave overlays */}
                   <div className="absolute inset-0 overflow-hidden">
                     <div
                       className={cn(
@@ -1965,7 +1944,6 @@ function WaterGlasses({
                     />
                   </div>
 
-                  {/* bubbles */}
                   {bubblesEnabled && (isFull || isPartial) && (
                     <div className="absolute inset-0 pointer-events-none">
                       <Bubble x="22%" delay="0s" />
@@ -1975,7 +1953,6 @@ function WaterGlasses({
                   )}
                 </div>
 
-                {/* hint */}
                 <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                   <span
                     className={cn(
@@ -2013,3 +1990,4 @@ function Bubble({ x = "50%", delay = "0s" }) {
     />
   );
 }
+
