@@ -1,3 +1,4 @@
+
 import React, { useEffect, useMemo, useState } from "react";
 import { ExternalLink, ShoppingBag, Sparkles, TrendingUp, Zap } from "lucide-react";
 
@@ -60,11 +61,12 @@ const FALLBACK_DEALS = [
 const DEFAULT_REMOTE_URL = "https://zenhydratation.vercel.app/zenhydratation-deals.json";
 
 // Composant Badge avec icône
-function DealBadge({ text, variant = "default", icon: Icon }) {
-  const variants = {
-    default: "bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 border-blue-200",
-    trending: "bg-gradient-to-r from-orange-50 to-red-50 text-orange-700 border-orange-200",
-    new: "bg-gradient-to-r from-emerald-50 to-teal-50 text-emerald-700 border-emerald-200"
+function DealBadge({ text, variant = "default", icon: Icon, theme }) {
+  const getVariantClasses = () => {
+    if (theme.id === "neo") {
+      return "bg-white/10 border border-white/10 text-white/75";
+    }
+    return "bg-black/[0.03] border border-black/10 text-gray-700";
   };
 
   return (
@@ -72,8 +74,8 @@ function DealBadge({ text, variant = "default", icon: Icon }) {
       "px-3 py-1.5",
       STYLES.borderRadius.badge,
       STYLES.fontSize.badge,
-      "font-bold inline-flex items-center gap-1.5 border",
-      variants[variant]
+      "font-bold inline-flex items-center gap-1.5",
+      getVariantClasses()
     )}>
       {Icon && <Icon className="h-3 w-3" />}
       {text}
@@ -82,26 +84,26 @@ function DealBadge({ text, variant = "default", icon: Icon }) {
 }
 
 // Skeleton de chargement
-function DealCardSkeleton() {
+function DealCardSkeleton({ theme }) {
   return (
-    <div className={cn(STYLES.borderRadius.card, STYLES.spacing.card, "bg-white shadow-sm border border-gray-100 animate-pulse")}>
+    <div className={cn(STYLES.borderRadius.card, STYLES.spacing.card, theme.card, "animate-pulse")}>
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1 space-y-3">
-          <div className="h-5 bg-gray-200 rounded w-3/4"></div>
-          <div className="h-4 bg-gray-100 rounded w-full"></div>
-          <div className="h-4 bg-gray-100 rounded w-2/3"></div>
+          <div className={cn("h-5 rounded w-3/4", theme.id === "neo" ? "bg-white/10" : "bg-gray-200")}></div>
+          <div className={cn("h-4 rounded w-full", theme.id === "neo" ? "bg-white/[0.05]" : "bg-gray-100")}></div>
+          <div className={cn("h-4 rounded w-2/3", theme.id === "neo" ? "bg-white/[0.05]" : "bg-gray-100")}></div>
           <div className="flex gap-2 mt-4">
-            <div className="h-6 bg-gray-200 rounded-full w-20"></div>
-            <div className="h-6 bg-gray-200 rounded-full w-24"></div>
+            <div className={cn("h-6 rounded-full w-20", theme.id === "neo" ? "bg-white/10" : "bg-gray-200")}></div>
+            <div className={cn("h-6 rounded-full w-24", theme.id === "neo" ? "bg-white/10" : "bg-gray-200")}></div>
           </div>
         </div>
-        <div className="h-10 w-24 bg-gray-200 rounded-2xl"></div>
+        <div className={cn("h-10 w-24 rounded-2xl", theme.id === "neo" ? "bg-white/10" : "bg-gray-200")}></div>
       </div>
     </div>
   );
 }
 
-export default function DealsPage({ remoteUrl = DEFAULT_REMOTE_URL }) {
+export default function DealsPage({ theme, remoteUrl = DEFAULT_REMOTE_URL }) {
 
   const [cat, setCat] = useState("Tous");
   const [loading, setLoading] = useState(true);
@@ -180,8 +182,12 @@ export default function DealsPage({ remoteUrl = DEFAULT_REMOTE_URL }) {
               STYLES.borderRadius.badge,
               "px-4 py-2 text-[12px] font-bold whitespace-nowrap transition-all shrink-0",
               cat === c
-                ? "bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-md shadow-blue-500/30"
-                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                ? theme.id === "neo"
+                  ? "bg-white/20 border border-white/20 text-white shadow-md"
+                  : "bg-black/[0.08] border border-black/10 text-gray-900 shadow-sm"
+                : theme.id === "neo"
+                  ? "bg-white/[0.05] border border-white/10 text-white/70 hover:bg-white/10"
+                  : "bg-black/[0.03] border border-black/[0.06] text-gray-600 hover:bg-black/[0.05]"
             )}
           >
             {c}
@@ -193,20 +199,21 @@ export default function DealsPage({ remoteUrl = DEFAULT_REMOTE_URL }) {
       <div className={STYLES.spacing.section}>
         {loading ? (
           <>
-            <DealCardSkeleton />
-            <DealCardSkeleton />
-            <DealCardSkeleton />
+            <DealCardSkeleton theme={theme} />
+            <DealCardSkeleton theme={theme} />
+            <DealCardSkeleton theme={theme} />
           </>
         ) : filtered.length === 0 ? (
           <div className={cn(
             STYLES.borderRadius.card,
-            "bg-white shadow-sm border border-gray-100 p-12 text-center"
+            theme.card,
+            "p-12 text-center"
           )}>
-            <div className="bg-gray-100 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <ShoppingBag className="h-8 w-8 text-gray-400" />
+            <div className={cn("w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4", theme.cardSoft)}>
+              <ShoppingBag className={cn("h-8 w-8", theme.id === "neo" ? "text-white/60" : "text-gray-400")} />
             </div>
-            <h3 className="text-[16px] font-bold text-gray-900 mb-2">Aucun résultat</h3>
-            <p className="text-[13px] text-gray-500">
+            <h3 className={cn("text-[16px] font-bold mb-2", theme.textPrimary)}>Aucun résultat</h3>
+            <p className={cn("text-[13px]", theme.textSecondary)}>
               Aucun produit dans cette catégorie pour le moment.
             </p>
           </div>
