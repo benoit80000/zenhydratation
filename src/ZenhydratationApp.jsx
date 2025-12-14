@@ -662,29 +662,34 @@ export default function ZenhydratationApp() {
     const sorted = [...history].sort((a, b) => (a.dayKey < b.dayKey ? -1 : 1));
     return sorted.slice(Math.max(0, sorted.length - n));
   };
+const window7 = useMemo(() => lastNDays(7), [history]);
+const window30 = useMemo(() => lastNDays(30), [history]);
 
-  const window7 = lastNDays(7);
-  const window30 = lastNDays(30);
+const sum = (arr, k) => arr.reduce((acc, x) => acc + (x[k] ?? 0), 0);
 
-  const sum = (arr, k) => arr.reduce((acc, x) => acc + (x[k] ?? 0), 0);
-
-  const chart7 = window7.map((d) => ({
+const chart7 = useMemo(() => 
+  window7.map((d) => ({
     day: d.dayKey.slice(5),
     water: Math.round((d.waterMl ?? 0) / Math.max(1, cupMl)),
     eye: d.eyeBreaks ?? 0,
     stretch: d.stretches ?? 0,
     wake: d.wakeRoutines ?? 0,
     sleep: d.sleepRoutines ?? 0
-  }));
+  })),
+  [window7, cupMl]
+);
 
-  const chart30 = window30.map((d) => ({
+const chart30 = useMemo(() =>
+  window30.map((d) => ({
     day: d.dayKey.slice(5),
     water: Math.round((d.waterMl ?? 0) / Math.max(1, cupMl)),
     eye: d.eyeBreaks ?? 0,
     stretch: d.stretches ?? 0,
     wake: d.wakeRoutines ?? 0,
     sleep: d.sleepRoutines ?? 0
-  }));
+  })),
+  [window30, cupMl]
+);
 
   /* =========================
    * Hydration actions (ml)
