@@ -206,10 +206,6 @@ export default function DealsPage({ theme, remoteUrl = DEFAULT_REMOTE_URL }) {
           </div>
         ) : null}
       </div>
-
-      <div className={cn("text-[12px] leading-snug", theme.textMuted)}>
-        Conseil: .
-      </div>
     </div>
   );
 }
