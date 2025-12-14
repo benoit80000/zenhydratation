@@ -112,21 +112,7 @@ export default function DealsPage({ theme, remoteUrl = DEFAULT_REMOTE_URL }) {
 
         {errorMsg ? <div className={cn("mt-2 text-[12px]", theme.textMuted)}>{errorMsg}</div> : null}
 
-        <div className="mt-4 grid grid-cols-1 gap-3">
-          <div className={cn("rounded-2xl px-3 py-3 flex items-center gap-2", theme.cardSoft)}>
-            <Search className={cn("h-4 w-4", theme.id === "neo" ? "text-white/75" : "text-gray-600")} />
-            <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Rechercher un produit…"
-              className={cn(
-                "w-full bg-transparent outline-none text-[13px] font-semibold",
-                theme.id === "neo"
-                  ? "text-white/85 placeholder:text-white/40"
-                  : "text-gray-800 placeholder:text-gray-400"
-              )}
-            />
-          </div>
+
 
           <select
             value={cat}
