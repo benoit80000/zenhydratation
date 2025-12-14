@@ -29,12 +29,21 @@ import DealsPage from "./DealsPage";
 
 /**
  * ==========================================================
- * ZenhydratationApp.jsx (Vercel-safe + Anti-flicker)
+ * ZenhydratationApp.jsx (Vercel-safe)
+ * - 3 thèmes : neo (Neo Glass), classic, wellness
+ * - Réglages via onglet Réglages (bottom nav)
+ * - Offline: localStorage (historique 30j)
+ * - Hydratation: ml (source de vérité), verres avec remplissage progressif
+ * - Appui long sur un verre = annuler (retirer une dose)
+ * - Bulles optionnelles
+ * - Avatar femme/homme/enfant + énergie (fatigue) qui s’améliore avec hydratation + routines
  *
- * Correctif principal "clignotement":
- * - workTime n'est plus dans todayStats (évite recréation d'un gros objet chaque seconde)
- * - history/streak ne sont plus "set" à chaque tick: on calcule un history dérivé via useMemo
- * - persistence history: uniquement au rollover de jour + quand l'app passe en arrière-plan
+ * MAJ:
+ * - Suppression de la "Hero" en haut
+ * - Ajout onglet "Bons Plans" après Stats, rendu via DealsPage
+ * - Remplacement "Raccourcis" => "Exercices"
+ * - Tuiles Exercices en format large (plein largeur) pour toutes
+ * - Ajout avatar "Enfant"
  * ==========================================================
  */
 
@@ -167,7 +176,8 @@ const THEMES = {
     textSecondary: "text-white/65",
     textMuted: "text-white/50",
     card: "border border-white/10 bg-white/[0.07] shadow-[0_18px_50px_rgba(0,0,0,0.35)] backdrop-blur-2xl",
-    cardSoft: "border border-white/10 bg-white/[0.06] shadow-[0_18px_45px_rgba(0,0,0,0.30)] backdrop-blur-2xl",
+    cardSoft:
+      "border border-white/10 bg-white/[0.06] shadow-[0_18px_45px_rgba(0,0,0,0.30)] backdrop-blur-2xl",
     nav: "border border-white/10 bg-white/[0.07] shadow-[0_18px_50px_rgba(0,0,0,0.35)] backdrop-blur-2xl",
     modalBackdrop: "bg-black/55",
     surfaceInput: "bg-black/30 border border-white/10 text-white/85",
@@ -296,9 +306,7 @@ function GlassIconPlate({ children, glow = "cyan", theme }) {
   return (
     <div className="relative">
       <div className={cn("absolute inset-0 rounded-full blur-2xl", glowMap[glow] ?? glowMap.cyan)} />
-      <div className={cn("h-11 w-11 rounded-2xl flex items-center justify-center", plate)}>
-        {children}
-      </div>
+      <div className={cn("h-11 w-11 rounded-2xl flex items-center justify-center", plate)}>{children}</div>
     </div>
   );
 }
@@ -342,16 +350,13 @@ export default function ZenhydratationApp() {
   const [waterMl, setWaterMl] = useState(0);
 
   // avatar + bubbles
-const [avatar, setAvatar] = useState("female"); // "female" | "male" | "child"
+  const [avatar, setAvatar] = useState("female"); // "female" | "male" | "child"
   const [bubblesEnabled, setBubblesEnabled] = useState(true);
 
   // timers
   const [eyeBreakTimer, setEyeBreakTimer] = useState(1200);
   const [stretchTimer, setStretchTimer] = useState(3600);
   const [isPaused, setIsPaused] = useState(false);
-
-  // work time separated (anti-flicker)
-  const [workTimeSec, setWorkTimeSec] = useState(0);
 
   // modals
   const [showSettings, setShowSettings] = useState(false);
@@ -362,7 +367,8 @@ const [avatar, setAvatar] = useState("female"); // "female" | "male" | "child"
   const [activeRoutine, setActiveRoutine] = useState(null);
 
   // history & stats
-  const [historyBase, setHistoryBase] = useState([]); // <- n'inclut pas "today"
+  const [history, setHistory] = useState([]);
+  const [streak, setStreak] = useState(0);
   const [todayStats, setTodayStats] = useState({
     dayKey: dayKey(),
     waterMl: 0,
@@ -370,6 +376,7 @@ const [avatar, setAvatar] = useState("female"); // "female" | "male" | "child"
     stretches: 0,
     wakeRoutines: 0,
     sleepRoutines: 0,
+    workTime: 0,
     details: { eye: {}, stretch: {}, wake: {}, sleep: {} }
   });
 
@@ -412,49 +419,35 @@ const [avatar, setAvatar] = useState("female"); // "female" | "male" | "child"
   }, [exercises]);
 
   /* =========================
-   * History derived (history + today) + streak derived
-   * ========================= */
-  const history = useMemo(() => {
-    const current = todayStats.dayKey;
-    const without = (historyBase ?? []).filter((e) => e.dayKey !== current);
-    const next = [...without, todayStats].sort((a, b) => (a.dayKey < b.dayKey ? -1 : 1));
-    return next.slice(Math.max(0, next.length - 30));
-  }, [historyBase, todayStats]);
-
-  const streak = useMemo(() => computeStreak(history, new Date()), [history]);
-
-  /* =========================
    * Load
    * ========================= */
   useEffect(() => {
     const loadedHistory = readLS(STORAGE_HISTORY_KEY, []);
     const h = Array.isArray(loadedHistory) ? loadedHistory : [];
+    setHistory(h);
+    setStreak(computeStreak(h, new Date()));
 
     const s = readLS(STORAGE_STATE_KEY, null);
+    if (!s) return;
+
+    if (typeof s.themeId === "string" && THEMES[s.themeId]) setThemeId(s.themeId);
+
+    if (typeof s.eyeBreakInterval === "number") setEyeBreakInterval(clampInt(s.eyeBreakInterval, 600, 7200));
+    if (typeof s.stretchInterval === "number") setStretchInterval(clampInt(s.stretchInterval, 900, 10800));
+    if (typeof s.soundEnabled === "boolean") setSoundEnabled(s.soundEnabled);
+
+    if (typeof s.cupMl === "number") setCupMl(clampInt(s.cupMl, 150, 600));
+    if (typeof s.dailyGoalMl === "number") setDailyGoalMl(clampInt(s.dailyGoalMl, 1200, 4000));
+
+    if (typeof s.avatar === "string") {
+      const v = s.avatar;
+      setAvatar(v === "male" ? "male" : v === "child" ? "child" : "female");
+    }
+
+    if (typeof s.bubblesEnabled === "boolean") setBubblesEnabled(s.bubblesEnabled);
 
     const current = dayKey();
-    lastDayRef.current = current;
-
-    // base history: on enlève today si présent (on le réinjecte via useMemo)
-    setHistoryBase(h.filter((e) => e?.dayKey && e.dayKey !== current));
-
-    if (s && typeof s.themeId === "string" && THEMES[s.themeId]) setThemeId(s.themeId);
-
-    if (s && typeof s.eyeBreakInterval === "number") setEyeBreakInterval(clampInt(s.eyeBreakInterval, 600, 7200));
-    if (s && typeof s.stretchInterval === "number") setStretchInterval(clampInt(s.stretchInterval, 900, 10800));
-    if (s && typeof s.soundEnabled === "boolean") setSoundEnabled(s.soundEnabled);
-
-    if (s && typeof s.cupMl === "number") setCupMl(clampInt(s.cupMl, 150, 600));
-    if (s && typeof s.dailyGoalMl === "number") setDailyGoalMl(clampInt(s.dailyGoalMl, 1200, 4000));
-   if (s && typeof s.avatar === "string") {
-  if (s.avatar === "male" || s.avatar === "child" || s.avatar === "female") setAvatar(s.avatar);
-  else setAvatar("female");
-}
-
-    if (s && typeof s.bubblesEnabled === "boolean") setBubblesEnabled(s.bubblesEnabled);
-
-    // today stats
-    if (s?.todayStats?.dayKey === current) {
+    if (s.todayStats?.dayKey === current) {
       setTodayStats({
         dayKey: current,
         waterMl: clampInt(s.todayStats.waterMl ?? 0, 0, 50_000),
@@ -462,22 +455,27 @@ const [avatar, setAvatar] = useState("female"); // "female" | "male" | "child"
         stretches: clampInt(s.todayStats.stretches ?? 0, 0, 500),
         wakeRoutines: clampInt(s.todayStats.wakeRoutines ?? 0, 0, 500),
         sleepRoutines: clampInt(s.todayStats.sleepRoutines ?? 0, 0, 500),
+        workTime: clampInt(s.todayStats.workTime ?? 0, 0, 24 * 3600),
         details: {
-          eye: (s.todayStats.details?.eye && typeof s.todayStats.details.eye === "object") ? s.todayStats.details.eye : {},
-          stretch: (s.todayStats.details?.stretch && typeof s.todayStats.details.stretch === "object") ? s.todayStats.details.stretch : {},
-          wake: (s.todayStats.details?.wake && typeof s.todayStats.details.wake === "object") ? s.todayStats.details.wake : {},
-          sleep: (s.todayStats.details?.sleep && typeof s.todayStats.details.sleep === "object") ? s.todayStats.details.sleep : {}
+          eye: s.todayStats.details?.eye && typeof s.todayStats.details.eye === "object" ? s.todayStats.details.eye : {},
+          stretch:
+            s.todayStats.details?.stretch && typeof s.todayStats.details.stretch === "object"
+              ? s.todayStats.details.stretch
+              : {},
+          wake: s.todayStats.details?.wake && typeof s.todayStats.details.wake === "object" ? s.todayStats.details.wake : {},
+          sleep:
+            s.todayStats.details?.sleep && typeof s.todayStats.details.sleep === "object"
+              ? s.todayStats.details.sleep
+              : {}
         }
       });
 
       if (typeof s.waterMl === "number") setWaterMl(clampInt(s.waterMl, 0, 50_000));
       else setWaterMl(clampInt(s.todayStats?.waterMl ?? 0, 0, 50_000));
 
-      setEyeBreakTimer(clampInt(s.eyeBreakTimer ?? (s.eyeBreakInterval ?? 1200), 1, 7200));
-      setStretchTimer(clampInt(s.stretchTimer ?? (s.stretchInterval ?? 3600), 1, 10800));
+      setEyeBreakTimer(clampInt(s.eyeBreakTimer ?? eyeBreakInterval, 1, 7200));
+      setStretchTimer(clampInt(s.stretchTimer ?? stretchInterval, 1, 10800));
       setIsPaused(!!s.isPaused);
-
-      if (typeof s.workTimeSec === "number") setWorkTimeSec(clampInt(s.workTimeSec, 0, 24 * 3600));
     } else {
       setTodayStats({
         dayKey: current,
@@ -486,18 +484,18 @@ const [avatar, setAvatar] = useState("female"); // "female" | "male" | "child"
         stretches: 0,
         wakeRoutines: 0,
         sleepRoutines: 0,
+        workTime: 0,
         details: { eye: {}, stretch: {}, wake: {}, sleep: {} }
       });
       setWaterMl(0);
-      setWorkTimeSec(0);
-      setEyeBreakTimer(s?.eyeBreakInterval ?? 1200);
-      setStretchTimer(s?.stretchInterval ?? 3600);
+      setEyeBreakTimer(s.eyeBreakInterval ?? 1200);
+      setStretchTimer(s.stretchInterval ?? 3600);
       setIsPaused(false);
     }
   }, []);
 
   /* =========================
-   * Save (debounced) - n'écrit plus toutes les secondes
+   * Save
    * ========================= */
   useEffect(() => {
     const payload = {
@@ -513,7 +511,6 @@ const [avatar, setAvatar] = useState("female"); // "female" | "male" | "child"
       eyeBreakTimer,
       stretchTimer,
       isPaused,
-      workTimeSec,
       todayStats
     };
 
@@ -538,7 +535,6 @@ const [avatar, setAvatar] = useState("female"); // "female" | "male" | "child"
     eyeBreakTimer,
     stretchTimer,
     isPaused,
-    workTimeSec,
     todayStats
   ]);
 
@@ -550,48 +546,28 @@ const [avatar, setAvatar] = useState("female"); // "female" | "male" | "child"
   }, [waterMl]);
 
   /* =========================
-   * Persist history safely (no per-second writes)
-   * - On visibility change: save derived history (30)
+   * Upsert today in history (max 30)
    * ========================= */
   useEffect(() => {
-    if (typeof document === "undefined") return;
-
-    const persist = () => {
-      writeLS(STORAGE_HISTORY_KEY, history);
-    };
-
-    const onVis = () => {
-      if (document.visibilityState !== "visible") persist();
-    };
-
-    document.addEventListener("visibilitychange", onVis);
-    window.addEventListener("beforeunload", persist);
-
-    return () => {
-      document.removeEventListener("visibilitychange", onVis);
-      window.removeEventListener("beforeunload", persist);
-    };
-  }, [history]);
+    const current = todayStats.dayKey;
+    setHistory((prev) => {
+      const without = prev.filter((e) => e.dayKey !== current);
+      const next = [...without, todayStats].sort((a, b) => (a.dayKey < b.dayKey ? -1 : 1));
+      const trimmed = next.slice(Math.max(0, next.length - 30));
+      writeLS(STORAGE_HISTORY_KEY, trimmed);
+      setStreak(computeStreak(trimmed, new Date()));
+      return trimmed;
+    });
+  }, [todayStats]);
 
   /* =========================
-   * Day rollover (commit yesterday into base history, reset today)
+   * Day rollover
    * ========================= */
   useEffect(() => {
     const id = setInterval(() => {
       const current = dayKey();
       if (lastDayRef.current !== current) {
-        // commit yesterday in base history
-        setHistoryBase((prev) => {
-          const without = (prev ?? []).filter((e) => e.dayKey !== lastDayRef.current);
-          const next = [...without, { ...todayStats }].sort((a, b) => (a.dayKey < b.dayKey ? -1 : 1));
-          const trimmed = next.slice(Math.max(0, next.length - 30));
-          writeLS(STORAGE_HISTORY_KEY, [...trimmed, { ...todayStats }].slice(-30));
-          return trimmed;
-        });
-
         lastDayRef.current = current;
-
-        // reset today
         setTodayStats({
           dayKey: current,
           waterMl: 0,
@@ -599,11 +575,10 @@ const [avatar, setAvatar] = useState("female"); // "female" | "male" | "child"
           stretches: 0,
           wakeRoutines: 0,
           sleepRoutines: 0,
+          workTime: 0,
           details: { eye: {}, stretch: {}, wake: {}, sleep: {} }
         });
-
         setWaterMl(0);
-        setWorkTimeSec(0);
         setEyeBreakTimer(eyeBreakInterval);
         setStretchTimer(stretchInterval);
         setShowNotif(null);
@@ -612,12 +587,11 @@ const [avatar, setAvatar] = useState("female"); // "female" | "male" | "child"
         setIsPaused(false);
       }
     }, 30_000);
-
     return () => clearInterval(id);
-  }, [eyeBreakInterval, stretchInterval, todayStats]);
+  }, [eyeBreakInterval, stretchInterval]);
 
   /* =========================
-   * Main timers (workTimeSec séparé)
+   * Main timers
    * ========================= */
   useEffect(() => {
     if (isPaused) return;
@@ -639,7 +613,7 @@ const [avatar, setAvatar] = useState("female"); // "female" | "male" | "child"
         return prev - 1;
       });
 
-      setWorkTimeSec((t) => t + 1);
+      setTodayStats((s) => ({ ...s, workTime: s.workTime + 1 }));
     }, 1000);
 
     return () => clearInterval(id);
@@ -864,7 +838,6 @@ const [avatar, setAvatar] = useState("female"); // "female" | "male" | "child"
           </button>
         </div>
 
-        {/* Energy / Avatar */}
         <div className={cn("mt-6 rounded-[28px] p-6", theme.card)}>
           <div className="flex items-center gap-4">
             <AvatarMood theme={theme} avatar={avatar} energyScore={energyScore} />
@@ -886,14 +859,11 @@ const [avatar, setAvatar] = useState("female"); // "female" | "male" | "child"
                 />
               </div>
 
-              <div className={cn("mt-2 text-[12px]", theme.textMuted)}>
-                Hydratation + routines = récupération progressive.
-              </div>
+              <div className={cn("mt-2 text-[12px]", theme.textMuted)}>Hydratation + routines = récupération progressive.</div>
             </div>
           </div>
         </div>
 
-        {/* Hydratation */}
         <div className={cn("mt-6 rounded-[28px] p-6", theme.card)}>
           <div className="flex items-end justify-between">
             <div className={cn("text-[28px] font-semibold leading-none", theme.textPrimary)}>Hydratation</div>
@@ -932,7 +902,6 @@ const [avatar, setAvatar] = useState("female"); // "female" | "male" | "child"
           </div>
         </div>
 
-        {/* Exercices */}
         <div className="mt-7">
           <div className={cn("text-[28px] font-semibold", theme.textPrimary)}>Exercices</div>
 
@@ -942,9 +911,7 @@ const [avatar, setAvatar] = useState("female"); // "female" | "male" | "child"
               title="Yeux"
               subtitle={`Prochaine pause dans ${formatTime(eyeBreakTimer)}`}
               glow="violet"
-              icon={
-                theme.id === "neo" ? <Eye className="h-6 w-6 text-white/85" /> : <Eye className="h-6 w-6 text-violet-600" />
-              }
+              icon={theme.id === "neo" ? <Eye className="h-6 w-6 text-white/85" /> : <Eye className="h-6 w-6 text-violet-600" />}
               onClick={() => setShowExercise("eye")}
             />
 
@@ -966,9 +933,7 @@ const [avatar, setAvatar] = useState("female"); // "female" | "male" | "child"
               title="Réveil"
               subtitle={`${exercises.wake.length} étapes`}
               glow="amber"
-              icon={
-                theme.id === "neo" ? <Sun className="h-6 w-6 text-white/85" /> : <Sun className="h-6 w-6 text-amber-600" />
-              }
+              icon={theme.id === "neo" ? <Sun className="h-6 w-6 text-white/85" /> : <Sun className="h-6 w-6 text-amber-600" />}
               onClick={() => startQueue("wake", exercises.wake)}
             />
 
@@ -977,9 +942,7 @@ const [avatar, setAvatar] = useState("female"); // "female" | "male" | "child"
               title="Coucher"
               subtitle={`${exercises.sleep.length} étapes`}
               glow="indigo"
-              icon={
-                theme.id === "neo" ? <Moon className="h-6 w-6 text-white/85" /> : <Moon className="h-6 w-6 text-indigo-600" />
-              }
+              icon={theme.id === "neo" ? <Moon className="h-6 w-6 text-white/85" /> : <Moon className="h-6 w-6 text-indigo-600" />}
               onClick={() => startQueue("sleep", exercises.sleep)}
             />
           </div>
@@ -995,8 +958,8 @@ const [avatar, setAvatar] = useState("female"); // "female" | "male" | "child"
   };
 
   const StatsScreen = () => {
-    const workH = Math.floor(workTimeSec / 3600);
-    const workM = Math.floor((workTimeSec % 3600) / 60);
+    const workH = Math.floor(todayStats.workTime / 3600);
+    const workM = Math.floor((todayStats.workTime % 3600) / 60);
 
     const renderDetail = (groupKey, title) => {
       const entries = Object.entries(todayStats.details?.[groupKey] ?? {});
@@ -1039,9 +1002,7 @@ const [avatar, setAvatar] = useState("female"); // "female" | "male" | "child"
           <div className="flex items-center gap-3">
             <Clock className={cn("h-6 w-6", theme.id === "neo" ? "text-white/80" : "text-gray-700")} />
             <div>
-              <div className={cn("text-[13px] font-semibold", theme.textMuted)}>
-                Temps de travail aujourd&apos;hui
-              </div>
+              <div className={cn("text-[13px] font-semibold", theme.textMuted)}>Temps de travail aujourd&apos;hui</div>
               <div className={cn("text-[26px] font-semibold", theme.textPrimary)}>
                 {workH}h {workM}m
               </div>
@@ -1065,24 +1026,14 @@ const [avatar, setAvatar] = useState("female"); // "female" | "male" | "child"
                 <BarChart data={chart7}>
                   <XAxis
                     dataKey="day"
-                    tick={{
-                      fill: theme.id === "neo" ? "rgba(255,255,255,0.65)" : "rgba(15,23,42,0.60)",
-                      fontSize: 12
-                    }}
+                    tick={{ fill: theme.id === "neo" ? "rgba(255,255,255,0.65)" : "rgba(15,23,42,0.60)", fontSize: 12 }}
                   />
                   <YAxis
                     allowDecimals={false}
-                    tick={{
-                      fill: theme.id === "neo" ? "rgba(255,255,255,0.65)" : "rgba(15,23,42,0.60)",
-                      fontSize: 12
-                    }}
+                    tick={{ fill: theme.id === "neo" ? "rgba(255,255,255,0.65)" : "rgba(15,23,42,0.60)", fontSize: 12 }}
                   />
                   <Tooltip contentStyle={tooltipStyle} />
-                  <Legend
-                    wrapperStyle={{
-                      color: theme.id === "neo" ? "rgba(255,255,255,0.7)" : "rgba(15,23,42,0.65)"
-                    }}
-                  />
+                  <Legend wrapperStyle={{ color: theme.id === "neo" ? "rgba(255,255,255,0.7)" : "rgba(15,23,42,0.65)" }} />
                   <Bar dataKey="water" name={`Eau (doses ${cupMl}ml)`} fill="rgba(34, 211, 238, 0.60)" />
                   <Bar dataKey="eye" name="Yeux" fill="rgba(167, 139, 250, 0.60)" />
                   <Bar dataKey="stretch" name="Étirements" fill="rgba(52, 211, 153, 0.60)" />
@@ -1108,24 +1059,14 @@ const [avatar, setAvatar] = useState("female"); // "female" | "male" | "child"
                 <BarChart data={chart30}>
                   <XAxis
                     dataKey="day"
-                    tick={{
-                      fill: theme.id === "neo" ? "rgba(255,255,255,0.65)" : "rgba(15,23,42,0.60)",
-                      fontSize: 12
-                    }}
+                    tick={{ fill: theme.id === "neo" ? "rgba(255,255,255,0.65)" : "rgba(15,23,42,0.60)", fontSize: 12 }}
                   />
                   <YAxis
                     allowDecimals={false}
-                    tick={{
-                      fill: theme.id === "neo" ? "rgba(255,255,255,0.65)" : "rgba(15,23,42,0.60)",
-                      fontSize: 12
-                    }}
+                    tick={{ fill: theme.id === "neo" ? "rgba(255,255,255,0.65)" : "rgba(15,23,42,0.60)", fontSize: 12 }}
                   />
                   <Tooltip contentStyle={tooltipStyle} />
-                  <Legend
-                    wrapperStyle={{
-                      color: theme.id === "neo" ? "rgba(255,255,255,0.7)" : "rgba(15,23,42,0.65)"
-                    }}
-                  />
+                  <Legend wrapperStyle={{ color: theme.id === "neo" ? "rgba(255,255,255,0.7)" : "rgba(15,23,42,0.65)" }} />
                   <Bar dataKey="water" name={`Eau (doses ${cupMl}ml)`} fill="rgba(34, 211, 238, 0.55)" />
                   <Bar dataKey="eye" name="Yeux" fill="rgba(167, 139, 250, 0.55)" />
                   <Bar dataKey="stretch" name="Étirements" fill="rgba(52, 211, 153, 0.55)" />
@@ -1225,9 +1166,7 @@ const [avatar, setAvatar] = useState("female"); // "female" | "male" | "child"
                     <div
                       className={cn(
                         "shrink-0 rounded-full px-3 py-1 text-[12px] font-semibold",
-                        theme.id === "neo"
-                          ? "bg-white/10 border border-white/10"
-                          : "bg-black/[0.03] border border-black/10"
+                        theme.id === "neo" ? "bg-white/10 border border-white/10" : "bg-black/[0.03] border border-black/10"
                       )}
                     >
                       <span className={theme.textSecondary}>{ex.durationSec}s</span>
@@ -1308,12 +1247,7 @@ const [avatar, setAvatar] = useState("female"); // "female" | "male" | "child"
             </div>
 
             <div className="mt-6 grid grid-cols-3 gap-3">
-              <SurfaceButton
-                onClick={toggleRoutinePause}
-                theme={theme}
-                className="text-center"
-                title={activeRoutine.paused ? "Reprendre" : "Pause"}
-              >
+              <SurfaceButton onClick={toggleRoutinePause} theme={theme} className="text-center" title={activeRoutine.paused ? "Reprendre" : "Pause"}>
                 <div className="flex items-center justify-center gap-2">
                   {activeRoutine.paused ? (
                     <Play className={cn("h-4 w-4", theme.id === "neo" ? "text-white/85" : "text-gray-700")} />
@@ -1366,9 +1300,7 @@ const [avatar, setAvatar] = useState("female"); // "female" | "male" | "child"
           <div className="flex items-start justify-between">
             <div className="flex items-start gap-3">
               <GlassIconPlate glow={t.glow} theme={theme}>
-                {theme.id === "neo"
-                  ? React.cloneElement(t.icon, { className: "h-6 w-6 text-white/85" })
-                  : t.icon}
+                {theme.id === "neo" ? React.cloneElement(t.icon, { className: "h-6 w-6 text-white/85" }) : t.icon}
               </GlassIconPlate>
               <div>
                 <div className={cn("text-[15px] font-semibold", theme.textPrimary)}>{title}</div>
@@ -1431,7 +1363,6 @@ const [avatar, setAvatar] = useState("female"); // "female" | "male" | "child"
             </div>
 
             <div className="mt-5 space-y-4 max-h-[70vh] overflow-y-auto pr-1">
-              {/* Theme selector */}
               <div className={cn("rounded-[22px] p-4", theme.cardSoft)}>
                 <div className={cn("text-[13px] font-semibold", theme.textSecondary)}>Thème</div>
                 <div className="mt-3 grid grid-cols-3 gap-2">
@@ -1457,64 +1388,63 @@ const [avatar, setAvatar] = useState("female"); // "female" | "male" | "child"
                 </div>
               </div>
 
-              {/* Avatar */}
+              {/* Avatar (3 choix) */}
               <div className={cn("rounded-[22px] p-4", theme.cardSoft)}>
                 <div className={cn("text-[13px] font-semibold", theme.textSecondary)}>Avatar</div>
-<div className="mt-3 grid grid-cols-3 gap-2">
-  <button
-    onClick={() => setAvatar("female")}
-    className={cn(
-      "rounded-2xl px-3 py-3 text-[12px] font-semibold transition border",
-      avatar === "female"
-        ? theme.id === "neo"
-          ? "border-white/20 bg-white/[0.10]"
-          : "border-black/15 bg-black/[0.04]"
-        : theme.id === "neo"
-          ? "border-white/10 bg-white/[0.06] hover:bg-white/[0.10]"
-          : "border-black/10 bg-black/[0.02] hover:bg-black/[0.04]",
-      theme.textPrimary
-    )}
-  >
-    Femme
-  </button>
+                <div className="mt-3 grid grid-cols-3 gap-2">
+                  <button
+                    onClick={() => setAvatar("female")}
+                    className={cn(
+                      "rounded-2xl px-3 py-3 text-[12px] font-semibold transition border",
+                      avatar === "female"
+                        ? theme.id === "neo"
+                          ? "border-white/20 bg-white/[0.10]"
+                          : "border-black/15 bg-black/[0.04]"
+                        : theme.id === "neo"
+                          ? "border-white/10 bg-white/[0.06] hover:bg-white/[0.10]"
+                          : "border-black/10 bg-black/[0.02] hover:bg-black/[0.04]",
+                      theme.textPrimary
+                    )}
+                  >
+                    Femme
+                  </button>
 
-  <button
-    onClick={() => setAvatar("male")}
-    className={cn(
-      "rounded-2xl px-3 py-3 text-[12px] font-semibold transition border",
-      avatar === "male"
-        ? theme.id === "neo"
-          ? "border-white/20 bg-white/[0.10]"
-          : "border-black/15 bg-black/[0.04]"
-        : theme.id === "neo"
-          ? "border-white/10 bg-white/[0.06] hover:bg-white/[0.10]"
-          : "border-black/10 bg-black/[0.02] hover:bg-black/[0.04]",
-      theme.textPrimary
-    )}
-  >
-    Homme
-  </button>
+                  <button
+                    onClick={() => setAvatar("male")}
+                    className={cn(
+                      "rounded-2xl px-3 py-3 text-[12px] font-semibold transition border",
+                      avatar === "male"
+                        ? theme.id === "neo"
+                          ? "border-white/20 bg-white/[0.10]"
+                          : "border-black/15 bg-black/[0.04]"
+                        : theme.id === "neo"
+                          ? "border-white/10 bg-white/[0.06] hover:bg-white/[0.10]"
+                          : "border-black/10 bg-black/[0.02] hover:bg-black/[0.04]",
+                      theme.textPrimary
+                    )}
+                  >
+                    Homme
+                  </button>
 
-  <button
-    onClick={() => setAvatar("child")}
-    className={cn(
-      "rounded-2xl px-3 py-3 text-[12px] font-semibold transition border",
-      avatar === "child"
-        ? theme.id === "neo"
-          ? "border-white/20 bg-white/[0.10]"
-          : "border-black/15 bg-black/[0.04]"
-        : theme.id === "neo"
-          ? "border-white/10 bg-white/[0.06] hover:bg-white/[0.10]"
-          : "border-black/10 bg-black/[0.02] hover:bg-black/[0.04]",
-      theme.textPrimary
-    )}
-  >
-    Enfant
-  </button>
-</div>
+                  <button
+                    onClick={() => setAvatar("child")}
+                    className={cn(
+                      "rounded-2xl px-3 py-3 text-[12px] font-semibold transition border",
+                      avatar === "child"
+                        ? theme.id === "neo"
+                          ? "border-white/20 bg-white/[0.10]"
+                          : "border-black/15 bg-black/[0.04]"
+                        : theme.id === "neo"
+                          ? "border-white/10 bg-white/[0.06] hover:bg-white/[0.10]"
+                          : "border-black/10 bg-black/[0.02] hover:bg-black/[0.04]",
+                      theme.textPrimary
+                    )}
+                  >
+                    Enfant
+                  </button>
+                </div>
+              </div>
 
-
-              {/* Hydration */}
               <div className={cn("rounded-[22px] p-4", theme.cardSoft)}>
                 <div className={cn("text-[13px] font-semibold", theme.textSecondary)}>Hydratation (ml)</div>
 
@@ -1547,12 +1477,9 @@ const [avatar, setAvatar] = useState("female"); // "female" | "male" | "child"
                   </select>
                 </div>
 
-                <div className={cn("mt-3 text-[12px]", theme.textMuted)}>
-                  Appui long sur un verre : −{cupMl}ml.
-                </div>
+                <div className={cn("mt-3 text-[12px]", theme.textMuted)}>Appui long sur un verre : −{cupMl}ml.</div>
               </div>
 
-              {/* Timers */}
               <div className={cn("rounded-[22px] p-4", theme.cardSoft)}>
                 <div className={cn("text-[13px] font-semibold", theme.textSecondary)}>Fréquence pauses yeux</div>
                 <select
@@ -1589,13 +1516,10 @@ const [avatar, setAvatar] = useState("female"); // "female" | "male" | "child"
                 </select>
               </div>
 
-              {/* Sound */}
               <div className={cn("rounded-[22px] p-4 flex items-center justify-between", theme.cardSoft)}>
                 <div>
                   <div className={cn("text-[13px] font-semibold", theme.textSecondary)}>Sons</div>
-                  <div className={cn("mt-1 text-[12px]", theme.textMuted)}>
-                    Sur le web, les sons nécessitent une première interaction utilisateur.
-                  </div>
+                  <div className={cn("mt-1 text-[12px]", theme.textMuted)}>Sur le web, les sons nécessitent une première interaction utilisateur.</div>
                 </div>
                 <input
                   type="checkbox"
@@ -1608,7 +1532,6 @@ const [avatar, setAvatar] = useState("female"); // "female" | "male" | "child"
                 />
               </div>
 
-              {/* Bubbles */}
               <div className={cn("rounded-[22px] p-4 flex items-center justify-between", theme.cardSoft)}>
                 <div>
                   <div className={cn("text-[13px] font-semibold", theme.textSecondary)}>Bulles dans l’eau</div>
@@ -1640,7 +1563,7 @@ const [avatar, setAvatar] = useState("female"); // "female" | "male" | "child"
     );
   };
 
-   /* =========================
+  /* =========================
    * Render
    * ========================= */
   return (
@@ -1654,18 +1577,13 @@ const [avatar, setAvatar] = useState("female"); // "female" | "male" | "child"
         {activeTab === "home" && <HomeScreen />}
         {activeTab === "stats" && <StatsScreen />}
 
-        {/* Bons Plans = page dédiée (fichier séparé) */}
         {activeTab === "deals" && <DealsPage theme={theme} remoteUrl={DEALS_REMOTE_URL} />}
 
-        {/* Bottom nav */}
         <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto px-5 pb-5">
           <div className={cn("rounded-[26px] px-6 py-4 flex items-center justify-around", theme.nav)}>
             <button
               onClick={() => setActiveTab("home")}
-              className={cn(
-                "flex flex-col items-center gap-1 transition",
-                activeTab === "home" ? theme.textPrimary : theme.textMuted
-              )}
+              className={cn("flex flex-col items-center gap-1 transition", activeTab === "home" ? theme.textPrimary : theme.textMuted)}
             >
               <Home className="h-6 w-6" />
               <span className="text-[11px] font-semibold">Accueil</span>
@@ -1673,10 +1591,7 @@ const [avatar, setAvatar] = useState("female"); // "female" | "male" | "child"
 
             <button
               onClick={() => setActiveTab("stats")}
-              className={cn(
-                "flex flex-col items-center gap-1 transition",
-                activeTab === "stats" ? theme.textPrimary : theme.textMuted
-              )}
+              className={cn("flex flex-col items-center gap-1 transition", activeTab === "stats" ? theme.textPrimary : theme.textMuted)}
             >
               <TrendingUp className="h-6 w-6" />
               <span className="text-[11px] font-semibold">Stats</span>
@@ -1684,10 +1599,7 @@ const [avatar, setAvatar] = useState("female"); // "female" | "male" | "child"
 
             <button
               onClick={() => setActiveTab("deals")}
-              className={cn(
-                "flex flex-col items-center gap-1 transition",
-                activeTab === "deals" ? theme.textPrimary : theme.textMuted
-              )}
+              className={cn("flex flex-col items-center gap-1 transition", activeTab === "deals" ? theme.textPrimary : theme.textMuted)}
             >
               <ShoppingBag className="h-6 w-6" />
               <span className="text-[11px] font-semibold">Bons Plans</span>
@@ -1695,10 +1607,7 @@ const [avatar, setAvatar] = useState("female"); // "female" | "male" | "child"
 
             <button
               onClick={() => setShowSettings(true)}
-              className={cn(
-                "flex flex-col items-center gap-1 transition",
-                showSettings ? theme.textPrimary : theme.textMuted
-              )}
+              className={cn("flex flex-col items-center gap-1 transition", showSettings ? theme.textPrimary : theme.textMuted)}
             >
               <Settings className="h-6 w-6" />
               <span className="text-[11px] font-semibold">Réglages</span>
@@ -1710,7 +1619,6 @@ const [avatar, setAvatar] = useState("female"); // "female" | "male" | "child"
         <RoutinePlayer />
         <SettingsModal />
 
-        {/* Keyframes */}
         <style>{`
           @keyframes zh_wave {
             0%   { transform: translateX(0) translateY(0); }
@@ -1730,7 +1638,7 @@ const [avatar, setAvatar] = useState("female"); // "female" | "male" | "child"
 }
 
 /* =========================
- * Large action tile (format plein largeur, cohérent sur toutes les tuiles Exercices)
+ * Large action tile
  * ========================= */
 function LargeActionTile({ theme, title, subtitle, icon, glow = "cyan", onClick }) {
   const glowMap = {
@@ -1767,17 +1675,17 @@ function LargeActionTile({ theme, title, subtitle, icon, glow = "cyan", onClick 
 }
 
 /* =========================
- * Avatar mood (emoji homme/femme/enfant + état qui évolue)
+ * Avatar mood (Femme/Homme/Enfant)
  * ========================= */
 function AvatarMood({ theme, avatar, energyScore }) {
   const person = avatar === "male" ? "👨" : avatar === "child" ? "👧" : "👩";
 
   const mood =
     energyScore < 35
-      ? { key: "tired", label: "Fatigué", emoji: "😴", aura: "bg-rose-500/15" }
+      ? { label: "Fatigué", emoji: "😴", aura: "bg-rose-500/15" }
       : energyScore < 70
-        ? { key: "ok", label: "En amélioration", emoji: "🙂", aura: "bg-amber-500/15" }
-        : { key: "good", label: "En forme", emoji: "😄", aura: "bg-emerald-500/15" };
+        ? { label: "En amélioration", emoji: "🙂", aura: "bg-amber-500/15" }
+        : { label: "En forme", emoji: "😄", aura: "bg-emerald-500/15" };
 
   const genderLabel = avatar === "male" ? "Homme" : avatar === "child" ? "Enfant" : "Femme";
 
@@ -1801,24 +1709,10 @@ function AvatarMood({ theme, avatar, energyScore }) {
 }
 
 /* =========================
- * Water glasses (progress fill + long press undo + bubbles)
+ * Water glasses
  * ========================= */
-function WaterGlasses({
-  totalMl,
-  goalMl,
-  cupMl,
-  onAdd,
-  onRemove,
-  theme,
-  bubblesEnabled = true,
-  size = "md"
-}) {
-  const dims =
-    size === "sm"
-      ? { h: 58, gap: 10 }
-      : size === "lg"
-        ? { h: 78, gap: 12 }
-        : { h: 68, gap: 12 };
+function WaterGlasses({ totalMl, goalMl, cupMl, onAdd, onRemove, theme, bubblesEnabled = true, size = "md" }) {
+  const dims = size === "sm" ? { h: 58, gap: 10 } : size === "lg" ? { h: 78, gap: 12 } : { h: 68, gap: 12 };
 
   const fillColor =
     theme.id === "neo"
@@ -1834,8 +1728,7 @@ function WaterGlasses({
         ? "bg-white/70 border-white/70"
         : "bg-white border-gray-200";
 
-  const rim =
-    theme.id === "neo" ? "bg-white/10" : theme.id === "wellness" ? "bg-white/70" : "bg-gray-100";
+  const rim = theme.id === "neo" ? "bg-white/10" : theme.id === "wellness" ? "bg-white/70" : "bg-gray-100";
 
   const maxCups = Math.max(1, Math.ceil(goalMl / Math.max(1, cupMl)));
   const filledCups = Math.floor(totalMl / Math.max(1, cupMl));
@@ -1866,13 +1759,7 @@ function WaterGlasses({
 
   return (
     <div className="w-full">
-      <div
-        className="grid"
-        style={{
-          gridTemplateColumns: `repeat(${maxCups}, minmax(0, 1fr))`,
-          gap: dims.gap
-        }}
-      >
+      <div className="grid" style={{ gridTemplateColumns: `repeat(${maxCups}, minmax(0, 1fr))`, gap: dims.gap }}>
         {Array.from({ length: maxCups }).map((_, i) => {
           const isFull = i < filledCups;
           const isPartial = i === filledCups && partialPct > 0;
@@ -1903,10 +1790,7 @@ function WaterGlasses({
 
                 <div className={cn("absolute top-0 left-0 right-0 h-[10%] opacity-60", rim)} />
 
-                <div
-                  className="absolute left-0 right-0 bottom-0 transition-[height] duration-700 ease-out"
-                  style={{ height: `${fillPct * 100}%` }}
-                >
+                <div className="absolute left-0 right-0 bottom-0 transition-[height] duration-700 ease-out" style={{ height: `${fillPct * 100}%` }}>
                   <div className={cn("absolute inset-0 bg-gradient-to-b", fillColor)} />
 
                   <div className="absolute inset-0 overflow-hidden">
@@ -1953,9 +1837,7 @@ function WaterGlasses({
         })}
       </div>
 
-      <div className={cn("mt-3 text-[12px]", theme.textMuted)}>
-        Clic: +{cupMl}ml • Appui long: −{cupMl}ml
-      </div>
+      <div className={cn("mt-3 text-[12px]", theme.textMuted)}>Clic: +{cupMl}ml • Appui long: −{cupMl}ml</div>
     </div>
   );
 }
@@ -1964,11 +1846,7 @@ function Bubble({ x = "50%", delay = "0s" }) {
   return (
     <span
       className="absolute bottom-2 w-2 h-2 rounded-full bg-white/35"
-      style={{
-        left: x,
-        animation: "zh_bubble 1.9s ease-in infinite",
-        animationDelay: delay
-      }}
+      style={{ left: x, animation: "zh_bubble 1.9s ease-in infinite", animationDelay: delay }}
     />
   );
 }
